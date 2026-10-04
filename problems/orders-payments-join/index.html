@@ -35,7 +35,9 @@
   </p>
   <p class="note">
     The notebook has the data, an answer cell and a <code>check()</code> function.
-    You need a Google account; nothing is installed on your machine.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
   </p>
 
 <h2>The situation</h2>
@@ -80,7 +82,8 @@ customers are off.</p>
 </table>
 <h3><code>payments</code></h3>
 <p>One row per payment attempt. An order can have no rows here, one row, or several:
-a failed attempt followed by a retry, or an order paid in two or three parts.</p>
+a failed attempt followed by a retry, an order paid in two or three parts, or
+occasionally an order the gateway charged twice in full.</p>
 <table>
 <thead>
 <tr>
@@ -126,7 +129,8 @@ a failed attempt followed by a retry, or an order paid in two or three parts.</p
 <ul>
 <li>An order is <strong>paid</strong> if it has at least one <code>SUCCESS</code> payment.</li>
 <li>A customer's <strong>revenue</strong> is the sum of <code>order_amount</code> over their paid orders.
-  Each paid order counts once, however many payments it took.</li>
+  Each paid order counts once, for its <code>order_amount</code>, however many payments it
+  took and whatever those payments add up to.</li>
 <li>Every customer in <code>orders</code> must appear in the result. A customer with no paid
   orders has <code>paid_orders</code> = 0 and <code>revenue</code> = 0.00.</li>
 </ul>
@@ -203,15 +207,16 @@ a failed attempt followed by a retry, or an order paid in two or three parts.</p
 join, the result has one row per successful payment, and <code>order_amount</code> is repeated on
 each of those rows. An order paid in two parts contributes its amount twice, an order
 paid in three parts three times.</p>
-<p>In this data, 16 of the 122 paid orders were paid in parts (13 in two, 3 in three).
-That inflates revenue for 11 of the 39 customers. The report totals 19,13,061.10
-against a correct 16,47,998.15.</p>
+<p>In this data, 24 of the 122 paid orders have more than one successful payment: 21
+were paid in parts and 3 were charged twice by the gateway. That inflates revenue for
+18 of the 39 customers. The report totals 20,22,750.08 against a correct 16,29,561.15.</p>
 <p>What makes it hard to spot:</p>
 <ul>
 <li><code>paid_orders</code> is correct. The code uses <code>countDistinct</code>, which hides the repeated
   rows for the count. Whoever wrote it handled the duplication for one column and not
   for the other.</li>
-<li>28 customers are exactly right, because none of their orders were paid in parts.
+<li>21 customers are exactly right, because each of their paid orders has a single
+  successful payment.
   Spot-checking a few customers can easily pass.</li>
 <li>Nothing fails. The row count is right and every number is plausible.</li>
 </ul>
@@ -249,13 +254,15 @@ have the same amount. Customer 117 has two separate paid orders of 499.00 each, 
 this version counts only one of them. De-duplicating on a measure is never safe; the
 key is <code>order_id</code>, not the amount.</p>
 <p><strong>Switching to an inner join, or filtering <code>status = 'SUCCESS'</code> after the left join.</strong>
-Both drop every order without a successful payment, and with them customers 139 and
-140, who have no paid orders at all. The result has 37 rows instead of 39. The
+Both drop every order without a successful payment, and with them customers 129, 134,
+139 and 140, who have no paid orders at all. The result has 35 rows instead of 39. The
 requirement says those customers must appear with 0 and 0.00.</p>
-<p><strong>Summing <code>payments.amount</code> instead of <code>order_amount</code>.</strong> This passes the check on this
-data, because every paid order here was paid in full, so its payments add up to the
-order amount. It answers a different question though: cash collected, not order value
-of paid orders. The two differ as soon as an order is partly paid or overpaid.</p>
+<p><strong>Summing <code>payments.amount</code> instead of <code>order_amount</code>.</strong> It looks like a neat way
+around the duplication, and for orders paid in parts it gives the right number. It
+answers a different question though: cash collected, not the value of paid orders.
+Three orders here were charged twice in full by the gateway, and this version counts
+them at double their value. The second charge is a refund waiting to happen, not
+revenue.</p>
 <p><strong><code>dropDuplicates(["order_id"])</code> after the join.</strong> This gives the right answer. It is
 still the weaker fix: it keeps an arbitrary payment row per order and relies on nobody
 later using a payment column from that DataFrame. Reducing <code>payments</code> before the join
@@ -272,8 +279,13 @@ makes the grain explicit.</p>
 <tbody>
 <tr>
 <td>Order paid in two or three <code>SUCCESS</code> payments</td>
-<td>16 orders</td>
+<td>21 orders</td>
 <td>The bug itself.</td>
+</tr>
+<tr>
+<td>Order charged twice in full</td>
+<td>3 orders, customers 108, 121 and 133</td>
+<td>Summing <code>payments.amount</code>.</td>
 </tr>
 <tr>
 <td><code>FAILED</code> attempt, then <code>SUCCESS</code></td>
@@ -282,17 +294,17 @@ makes the grain explicit.</p>
 </tr>
 <tr>
 <td>Orders with only <code>FAILED</code> or <code>PENDING</code> attempts</td>
-<td>17 orders</td>
+<td>18 orders</td>
 <td>Treating "has a payment row" as "paid".</td>
 </tr>
 <tr>
 <td>Orders with no payment rows</td>
-<td>11 orders</td>
+<td>10 orders</td>
 <td>Inner join drops them.</td>
 </tr>
 <tr>
 <td>Customers with no paid orders</td>
-<td>139 and 140</td>
+<td>129, 134, 139 and 140</td>
 <td>Inner join drops the customer; missing <code>COALESCE</code> gives NULL instead of 0.00.</td>
 </tr>
 <tr>
