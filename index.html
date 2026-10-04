@@ -6,20 +6,26 @@
   <title>NullTrap: real-world SQL and PySpark practice problems</title>
   <meta name="description" content="Data engineering practice problems in SQL and PySpark, built from real pipeline situations: duplicates, late data, SCD2, incremental loads. Runs free in Google Colab.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/">
+  <link rel="icon" href="./static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./static/favicon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="NullTrap: real-world SQL and PySpark practice problems">
   <meta property="og:description" content="Data engineering practice problems in SQL and PySpark, built from real pipeline situations: duplicates, late data, SCD2, incremental loads. Runs free in Google Colab.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/">
   <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="./static/style.css">
   <link rel="stylesheet" href="./static/code.css">
+  <script defer src="./static/progress.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="./">NullTrap</a>
+      <a class="brand" href="./"><img src="./static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="./problems/">Problems</a>
+        <a href="./#about">About</a>
       </nav>
     </div>
   </header>
@@ -95,12 +101,31 @@ the expected output.</span></pre>
   </p>
 </section>
 
+<section id="about">
+  <h2>About</h2>
+  <p>
+    NullTrap is built by Rishikesh Pandey, a data engineer who works with PySpark,
+    Databricks and Delta Lake.
+  </p>
+  <p>
+    Most practice sites test whether you can write a query. In a real pipeline the query
+    is rarely the hard part. The data is: the NULL in a lookup table, the payment that
+    arrives twice, the event that shows up two days late. Every problem here is built
+    around one such trap, and is tagged with it, so you can practise the kind of mistake
+    you keep making.
+  </p>
+  <p>
+    It is a one-person side project. If something is wrong or unclear,
+    <a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">open an issue on GitHub</a>.
+  </p>
+</section>
+
 <section>
   <h2>Latest problems</h2>
   <div class="problem-list">
-<div class="problem-card" data-track="pyspark" data-difficulty="hard"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p><h3><a href="./problems/asof-exchange-rate-join/">Convert each transaction with the rate valid at the time</a></h3><p>A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p></div>
-<div class="problem-card" data-track="sql" data-difficulty="hard"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p><h3><a href="./problems/merge-overlapping-periods/">Merge overlapping coverage periods</a></h3><p>Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p></div>
-<div class="problem-card" data-track="debug-the-ai" data-difficulty="easy"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p><h3><a href="./problems/union-swapped-columns/">The union that swaps two columns</a></h3><p>AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p></div>
+<div class="problem-card" data-slug="asof-exchange-rate-join" data-track="pyspark" data-difficulty="hard" data-trap="fan-out boundary"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">Fan-out trap</span><span class="badge trap">Boundary trap</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p><h3><a href="./problems/asof-exchange-rate-join/">Convert each transaction with the rate valid at the time</a></h3><p>A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p></div>
+<div class="problem-card" data-slug="merge-overlapping-periods" data-track="sql" data-difficulty="hard" data-trap="boundary"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge trap">Boundary trap</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p><h3><a href="./problems/merge-overlapping-periods/">Merge overlapping coverage periods</a></h3><p>Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p></div>
+<div class="problem-card" data-slug="union-swapped-columns" data-track="debug-the-ai" data-difficulty="easy" data-trap="schema"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge trap">Schema trap</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p><h3><a href="./problems/union-swapped-columns/">The union that swaps two columns</a></h3><p>AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p></div>
   </div>
 </section>
 

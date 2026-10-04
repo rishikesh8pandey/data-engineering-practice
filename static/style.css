@@ -79,11 +79,7 @@ th { background: var(--surface); font-weight: 600; }
 .site-header { position: sticky; top: 0; z-index: 10; background: var(--ink); }
 .site-header .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-top: 12px; padding-bottom: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #ffffff; text-decoration: none; }
-.brand::before {
-  content: "";
-  width: 22px; height: 22px; border-radius: 6px;
-  background: linear-gradient(135deg, #fb923c, #7c3aed);
-}
+.brand img { display: block; border-radius: 6px; }
 .site-header nav a { margin-left: 20px; color: var(--ink-text); text-decoration: none; font-size: 0.95rem; }
 .site-header nav a:first-child { margin-left: 0; }
 .site-header nav a:hover { color: #ffffff; text-decoration: underline; }
@@ -224,6 +220,18 @@ details.explanation[open] summary { border-bottom: 1px solid var(--border); }
 details.explanation h2 { border-top: 0; font-size: 1.2rem; margin-top: 1.4em; }
 details.explanation table, details.explanation code { background: var(--bg); }
 details.explanation pre code { background: none; }
+
+/* Trap tags and solved state */
+.badge.trap { color: #fdba74; border-color: var(--ink-soft); background: var(--ink-soft); }
+.badge.solved { color: var(--easy); border-color: var(--easy); background: transparent; }
+.problem-card[data-status="solved"] { border-left-color: var(--easy); }
+
+.problem-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.button.secondary { background: transparent; color: var(--text); border-color: var(--border); }
+.button.secondary:hover { background: var(--surface); }
+.button.secondary.is-solved { color: var(--easy); border-color: var(--easy); }
+
+#about { scroll-margin-top: 70px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }

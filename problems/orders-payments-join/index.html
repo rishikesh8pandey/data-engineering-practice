@@ -6,20 +6,26 @@
   <title>Revenue per customer is higher than the ledger | Debug the AI problem | NullTrap</title>
   <meta name="description" content="An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/orders-payments-join/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Revenue per customer is higher than the ledger | Debug the AI problem | NullTrap">
   <meta property="og:description" content="An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/orders-payments-join/">
   <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="../../static/style.css">
   <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
       </nav>
     </div>
   </header>
@@ -27,16 +33,18 @@
 <article class="problem">
   <p class="breadcrumb"><a href="../">Problems</a></p>
   <h1>Revenue per customer is higher than the ledger</h1>
-  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">joins</span><span class="badge">row duplication</span><span class="badge">aggregation</span></p>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge trap">Fan-out trap</span><span class="badge">joins</span><span class="badge">row duplication</span><span class="badge">aggregation</span></p>
 
-  <p>
+  <p class="problem-actions">
     <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/001-orders-payments-join.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="orders-payments-join" hidden>Mark as solved</button>
   </p>
   <p class="note">
     The notebook has the data, an answer cell and a <code>check()</code> function.
     You need a Google account; nothing is installed on your machine. Free Colab runs
     only two or three notebooks at a time, so end the session of a finished problem
     (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
   </p>
 
 <h2>The situation</h2>

@@ -1,11 +1,12 @@
 // Problem list filters. Every card is already in the HTML; this only hides the ones
 // that do not match. The chosen filters are kept in the URL so a filtered list can be shared.
+// Loaded after progress.js, which sets data-status on each card.
 (function () {
   var form = document.getElementById("filters");
   var cards = document.querySelectorAll("#problem-list .problem-card");
   var count = document.getElementById("filter-count");
   var noResults = document.getElementById("no-results");
-  var names = ["track", "difficulty"];
+  var names = ["track", "difficulty", "trap", "status"];
 
   var params = new URLSearchParams(window.location.search);
   names.forEach(function (name) {
@@ -17,12 +18,17 @@
     if (known) select.value = wanted;
   });
 
+  function matches(card, name, wanted) {
+    // A card can carry several values for one filter (a problem can have two traps).
+    return (card.dataset[name] || "").split(" ").indexOf(wanted) !== -1;
+  }
+
   function apply() {
     var shown = 0;
     cards.forEach(function (card) {
       var match = names.every(function (name) {
         var wanted = form.elements[name].value;
-        return !wanted || card.dataset[name] === wanted;
+        return !wanted || matches(card, name, wanted);
       });
       card.hidden = !match;
       if (match) shown += 1;
