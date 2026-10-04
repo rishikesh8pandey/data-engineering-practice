@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Which tier was the customer in when they ordered? | SQL problem | NullTrap</title>
+  <meta name="description" content="Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-point-in-time-lookup/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Which tier was the customer in when they ordered? | SQL problem | NullTrap">
+  <meta property="og:description" content="Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-point-in-time-lookup/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>19. Which tier was the customer in when they ordered?</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">between</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/019-scd2-point-in-time-lookup.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="scd2-point-in-time-lookup" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Customers move between loyalty tiers over time. <code>customer_dim</code> keeps the history as a
+type 2 slowly changing dimension: one row per period during which a customer stayed in
+one tier.</p>
+<p>Marketing wants to know how much each tier spends. For that, every order has to carry
+the tier the customer was in on the day of the order, not the tier they are in today.</p>
+<h2>Input tables</h2>
+<h3><code>customer_dim</code></h3>
+<p>One row per tier period of a customer.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer.</td>
+</tr>
+<tr>
+<td><code>tier</code></td>
+<td>STRING</td>
+<td><code>SILVER</code>, <code>GOLD</code> or <code>PLATINUM</code>.</td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td>DATE</td>
+<td>First day of the period.</td>
+</tr>
+<tr>
+<td><code>valid_to</code></td>
+<td>DATE</td>
+<td>The day the period ended. The customer was no longer in this tier on that day. NULL for the customer's current period.</td>
+</tr>
+</tbody>
+</table>
+<p>A customer's periods never overlap. Usually the next period starts on the day the
+previous one ends, but a customer can also have been out of the programme for a while.</p>
+<h3><code>orders</code></h3>
+<p>One row per order.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who ordered. Not every customer is in <code>customer_dim</code>.</td>
+</tr>
+<tr>
+<td><code>order_date</code></td>
+<td>DATE</td>
+<td>Date of the order.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Order value in rupees.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return every order exactly once, with the customer's tier on the order date.</p>
+<ul>
+<li>A period covers <code>valid_from</code> and every later day <strong>before</strong> <code>valid_to</code>. An order
+  placed on the day a customer changes tier belongs to the new tier.</li>
+<li>A period with a NULL <code>valid_to</code> covers every day from <code>valid_from</code> onwards.</li>
+<li>If no period of the customer covers the order date, <code>tier</code> is NULL. That happens
+  for orders before the customer's first period, during a break in the programme,
+  and for customers that are not in <code>customer_dim</code>.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per order.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>order_date</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>tier</code></td>
+<td>STRING</td>
+<td>The tier on the order date. NULL if no period covers it.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "scd2-point-in-time-lookup", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customer_dim", "url": "../../data/019-scd2-point-in-time-lookup/customer_dim.parquet"}, {"name": "orders", "url": "../../data/019-scd2-point-in-time-lookup/orders.parquet"}], "starter": "-- Tables: customer_dim, orders\nSELECT *\nFROM customer_dim\nLIMIT 10", "expected": {"columns": ["amount", "customer_id", "order_date", "order_id", "tier"], "row_count": 199, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"amount\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"order_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"order_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"tier\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "d7687a70f29ef4d223642878ddf80bbe1c3e47ede7dc99f5c432967a526222c2", "column_checks": [{"name": "amount", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"amount\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "783645d7ca4be1c51e6a1316c73b3c6704ad59d881798c6969c23d0e66b0ed01"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6a9d6604b9e44ef1cb21a75614b3043d80aca0054b579d15fcc4ec5d862242e9"}, {"name": "order_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"order_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "9c4b63ecc93ded434b33aad83910b497edd4ba1261fc801fbc6122281efbedfd"}, {"name": "order_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"order_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "5d60ed3fdddabe389b65ffbe45a0a7969a3379237507b1b8bdb03c0301343abb"}, {"name": "tier", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"tier\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "51b855bb2822019853a9f5f2fea51a57519004a60177d9ae14f2b8032a73cd7e"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>Each row of an SCD2 table describes a period. Joining a fact to it means finding the
+one period that contains the fact's date. That is a join on the key plus a range
+condition:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="n">o</span>
+<span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">customer_dim</span><span class="w"> </span><span class="n">d</span>
+<span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">customer_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">customer_id</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">valid_from</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">order_date</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="n">valid_to</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">order_date</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">valid_to</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Three decisions are in those lines.</p>
+<p><strong>The lower bound is inclusive, the upper bound is exclusive.</strong> The table says
+<code>valid_to</code> is the day the period ended and the next one began. A period therefore
+covers <code>valid_from &lt;= date &lt; valid_to</code>. With this convention the periods fit together
+without overlapping, and every date belongs to exactly one of them.</p>
+<p><strong>The current period has no end.</strong> Its <code>valid_to</code> is NULL. <code>order_date &lt; NULL</code> is not
+true, so without the <code>IS NULL</code> branch no order would ever match a current period.</p>
+<p><strong>It is a left join.</strong> An order that no period covers still has to appear, with a
+NULL tier.</p>
+<p>There are 199 orders. 44 of them have no tier: they were placed before the customer's
+first period, during a break, or by a customer who is not in the dimension.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>BETWEEN valid_from AND valid_to</code>.</strong> Returns 209 rows. <code>BETWEEN</code> includes both ends.
+On the day a customer changes tier, the old period's <code>valid_to</code> and the new period's
+<code>valid_from</code> are the same date, so an order on that day matches both periods and
+appears twice, once with each tier. Nothing fails; revenue is simply counted twice for
+those orders. This is the most common bug in SCD2 joins.</p>
+<p><strong>Forgetting the NULL <code>valid_to</code>.</strong> Row count is right, tiers are wrong: every order
+that falls in a customer's current period gets NULL. Since current periods cover the
+most recent orders, the newest data is the data that goes missing.</p>
+<p><strong>Inner join.</strong> Returns 155 rows. The 44 orders without a period are dropped, and so
+is their revenue.</p>
+<p><strong>Joining to the current tier</strong> (<code>is_current</code>, or <code>valid_to IS NULL</code>). Assigns every
+order the tier the customer has today. 91 of the 199 orders get a different answer.
+This rewrites history: a customer who was SILVER when they bought and is PLATINUM now
+has all their old spending counted as PLATINUM spending.</p>
+<p><strong>Joining on <code>customer_id</code> alone.</strong> Returns 488 rows: every order once for every
+period the customer ever had.</p>
+<p><strong><code>valid_from &lt; order_date</code>.</strong> An order on the first day of a period finds no period.</p>
+<h2>Know the convention of your table</h2>
+<p>This table uses an exclusive <code>valid_to</code>. Many warehouses use an inclusive one, where a
+period ending on 31 March is followed by one starting on 1 April, and some use a far
+future date such as 9999-12-31 instead of NULL for the current row. With an inclusive
+end date, <code>BETWEEN</code> is correct. Read the table's documentation, or look at two
+consecutive rows of one customer, before writing the join. The exclusive convention
+has one advantage: it also works for timestamps, where "one day before" has no clean
+meaning.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Order on the day the tier changed</td>
+<td>10 orders</td>
+<td><code>BETWEEN</code> matches two periods.</td>
+</tr>
+<tr>
+<td>Order in the customer's current period</td>
+<td>many orders</td>
+<td>Missing <code>valid_to IS NULL</code>.</td>
+</tr>
+<tr>
+<td>Order before the customer's first period</td>
+<td>many orders</td>
+<td>Inner join.</td>
+</tr>
+<tr>
+<td>Order on the first day of a period</td>
+<td>customers 703, 711, 720</td>
+<td><code>&lt;</code> instead of <code>&lt;=</code> on <code>valid_from</code>.</td>
+</tr>
+<tr>
+<td>A break between two periods</td>
+<td>customer 728, March to May</td>
+<td>Assuming periods are always contiguous.</td>
+</tr>
+<tr>
+<td>Customer not in the dimension</td>
+<td>customer 799</td>
+<td>Inner join.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

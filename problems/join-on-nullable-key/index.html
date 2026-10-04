@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The regions that sold nothing, according to the join | Debug the AI problem | NullTrap</title>
+  <meta name="description" content="AI-written PySpark code compares regional sales with targets by joining on country and state. Regions whose state is NULL show zero sales, because NULL never equals NULL in a join. Find the bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/join-on-nullable-key/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The regions that sold nothing, according to the join | Debug the AI problem | NullTrap">
+  <meta property="og:description" content="AI-written PySpark code compares regional sales with targets by joining on country and state. Regions whose state is NULL show zero sales, because NULL never equals NULL in a join. Find the bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/join-on-nullable-key/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>18. The regions that sold nothing, according to the join</h1>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">NULL trap</span><span class="badge">joins</span><span class="badge">null keys</span><span class="badge">eqNullSafe</span><span class="badge">composite key</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/018-join-on-nullable-key.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="join-on-nullable-key" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Sales targets are set per region, and a region is a country plus a state. Small
+countries are managed as one region and have no state.</p>
+<p>An AI assistant wrote the target report in the answer cell. It runs, returns one row
+per target, and the big regions look right. But the managers for Singapore and the
+UAE are being told they sold nothing this quarter, and they have the invoices to
+prove otherwise.</p>
+<p>Find the bug and fix it.</p>
+<h2>Input tables</h2>
+<h3><code>sales</code></h3>
+<p>One row per sale.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sale_id</code></td>
+<td>BIGINT</td>
+<td>Unique per sale.</td>
+</tr>
+<tr>
+<td><code>country</code></td>
+<td>STRING</td>
+<td>Country code. Never NULL.</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>STRING</td>
+<td>State code. NULL for countries that are managed as a single region.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Sale value in rupees.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>targets</code></h3>
+<p>One row per region that has a target.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>country</code></td>
+<td>STRING</td>
+<td>Country code. Never NULL.</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>STRING</td>
+<td>State code. NULL for countries that are managed as a single region.</td>
+</tr>
+<tr>
+<td><code>target_amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>The region's sales target for the quarter.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return every region in <code>targets</code> with its actual sales.</p>
+<ul>
+<li>A sale belongs to a region if the country is the same and the state is the same.
+  For a single-region country, the state is NULL on both sides and that counts as
+  the same.</li>
+<li><code>actual_amount</code> is the sum of the region's sales, and 0.00 if it has none.</li>
+<li><code>achieved</code> is true if <code>actual_amount</code> is at least <code>target_amount</code>.</li>
+<li>Sales in regions without a target are ignored.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per region in <code>targets</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>country</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>STRING</td>
+<td>NULL for single-region countries.</td>
+</tr>
+<tr>
+<td><code>target_amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>actual_amount</code></td>
+<td>DECIMAL(14,2)</td>
+<td>0.00 if the region has no sales.</td>
+</tr>
+<tr>
+<td><code>achieved</code></td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2>The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">F</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Actual sales against target for every region.&quot;&quot;&quot;</span>
+    <span class="n">sales</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;sales&quot;</span><span class="p">)</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;targets&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Total sales per region</span>
+    <span class="n">actuals</span> <span class="o">=</span> <span class="n">sales</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;country&quot;</span><span class="p">,</span> <span class="s2">&quot;state&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;actual_amount&quot;</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Left join so that regions without any sales are kept</span>
+    <span class="n">report</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">actuals</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;country&quot;</span><span class="p">,</span> <span class="s2">&quot;state&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Regions without sales have an actual of zero</span>
+    <span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span>
+        <span class="s2">&quot;actual_amount&quot;</span><span class="p">,</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;actual_amount&quot;</span><span class="p">),</span> <span class="n">F</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;decimal(14,2)&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Flag the regions that reached their target</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="s2">&quot;country&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;state&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;target_amount&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;actual_amount&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;actual_amount&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;target_amount&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;achieved&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">report</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">actuals</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;country&quot;</span><span class="p">,</span> <span class="s2">&quot;state&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Joining on a list of column names means <code>targets.country = actuals.country AND
+targets.state = actuals.state</code>. For Singapore, <code>state</code> is NULL on both sides, and in
+SQL <code>NULL = NULL</code> is not true. It is NULL, which a join treats as "no match".</p>
+<p>So the Singapore target finds no sales. The left join keeps the target row, the
+<code>coalesce</code> turns the missing actual into 0, and the report says Singapore sold
+nothing. In fact it sold 8,22,342.00 against a target of 5,00,000.00.</p>
+<p>Everything after the join made it worse, not better: the left join and the <code>coalesce</code>
+were added to handle regions that really have no sales, and they make a failed match
+look exactly like one.</p>
+<p>Of the 13 target rows, 5 have a NULL state. Four of those have sales and are wrong;
+62 of the 242 sales rows belong to them. Two regions flip from "achieved" to "not
+achieved".</p>
+<p>Why it is hard to spot:</p>
+<ul>
+<li>The row count is right: one row per target.</li>
+<li>All eight regions with a state are correct.</li>
+<li>A region showing 0.00 is a normal thing for this report to contain. Two regions
+  (Gujarat and Qatar) really did sell nothing.</li>
+</ul>
+<h2>The fix</h2>
+<p>Use a null-safe comparison for the column that can be NULL:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">same_region</span> <span class="o">=</span> <span class="p">(</span><span class="n">targets</span><span class="p">[</span><span class="s2">&quot;country&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">actuals</span><span class="p">[</span><span class="s2">&quot;country&quot;</span><span class="p">])</span> <span class="o">&amp;</span> <span class="n">targets</span><span class="p">[</span><span class="s2">&quot;state&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">eqNullSafe</span><span class="p">(</span><span class="n">actuals</span><span class="p">[</span><span class="s2">&quot;state&quot;</span><span class="p">])</span>
+<span class="n">report</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">actuals</span><span class="p">,</span> <span class="n">same_region</span><span class="p">,</span> <span class="s2">&quot;left&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>eqNullSafe</code> treats two NULLs as equal and a NULL and a value as different. In SQL the
+operator is <code>&lt;=&gt;</code>, and standard SQL spells it <code>IS NOT DISTINCT FROM</code>.</p>
+<p>Because the join condition is now an expression rather than a list of names, both
+<code>country</code> and <code>state</code> columns are in the result. Select the ones from <code>targets</code>
+explicitly.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Replacing NULL with a placeholder on both sides</strong>, such as
+<code>coalesce(state, '')</code>. This passes here. It works as long as the placeholder can never
+be a real value, and it has to be applied identically everywhere the key is used. An
+empty string that later turns up as real data, or one side using <code>''</code> and the other
+<code>'N/A'</code>, brings the bug back. <code>eqNullSafe</code> says what is meant without inventing a
+value.</p>
+<p><strong>Joining on <code>country</code> only.</strong> Returns 37 rows. Every Indian state's target is matched
+with the sales of every Indian state.</p>
+<p><strong>Switching to an inner join with the null-safe condition.</strong> Returns 11 rows. The two
+regions with a target and no sales disappear. The left join was right; only the
+condition was wrong.</p>
+<p><strong>Removing the <code>coalesce</code>.</strong> The regions without sales show NULL instead of 0.00, and
+<code>achieved</code> becomes NULL for them, since <code>NULL &gt;= target</code> is NULL.</p>
+<h2>Where this comes up</h2>
+<p>Any composite key with an optional part: country and state, product and variant,
+account and sub-account. It also appears when comparing two versions of a table to
+find changed rows: <code>old.city &lt;&gt; new.city</code> misses every change to or from NULL, which
+is the same rule seen from the other side (problem 4).</p>
+<p>A useful habit: before joining on a column, check whether it can be NULL.
+<code>df.filter(F.col("state").isNull()).count()</code> takes a few seconds and answers it.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Regions</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NULL state on both sides, with sales</td>
+<td>SG, AE, NP, LK</td>
+<td>The bug itself.</td>
+</tr>
+<tr>
+<td>NULL state, target but no sales</td>
+<td>QA</td>
+<td>Must be 0.00 for the right reason.</td>
+</tr>
+<tr>
+<td>State present, target but no sales</td>
+<td>IN-GJ</td>
+<td>Inner join drops it.</td>
+</tr>
+<tr>
+<td>Sales in a region without a target</td>
+<td>US-WA, BD</td>
+<td>Must not appear in the result.</td>
+</tr>
+<tr>
+<td>Several states in one country</td>
+<td>IN, US</td>
+<td>Joining on <code>country</code> alone.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

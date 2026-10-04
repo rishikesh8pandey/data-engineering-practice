@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The daily report that is five and a half hours off | Debug the AI problem | NullTrap</title>
+  <meta name="description" content="AI-written PySpark code builds a daily activity report for India from UTC timestamps. The weekly total is right but every day is wrong. Find the time zone bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/utc-dates-in-india-report/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The daily report that is five and a half hours off | Debug the AI problem | NullTrap">
+  <meta property="og:description" content="AI-written PySpark code builds a daily activity report for India from UTC timestamps. The weekly total is right but every day is wrong. Find the time zone bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/utc-dates-in-india-report/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>14. The daily report that is five and a half hours off</h1>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">time zones</span><span class="badge">utc</span><span class="badge">ist</span><span class="badge">dates</span><span class="badge">daily aggregation</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/014-utc-dates-in-india-report.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="utc-dates-in-india-report" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>The app stores every event with a UTC timestamp. The India business team gets a daily
+report: events and active users per day.</p>
+<p>An AI assistant wrote the job in the answer cell. The weekly totals match the raw
+event count exactly, so it was signed off. Then the support team in Pune noticed
+that activity from just after midnight keeps showing up under the previous day.</p>
+<p>Find the bug and fix it.</p>
+<h2>Input tables</h2>
+<h3><code>app_events</code></h3>
+<p>One row per event.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_id</code></td>
+<td>BIGINT</td>
+<td>Unique per event.</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td>The user who triggered the event.</td>
+</tr>
+<tr>
+<td><code>event_ts</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the event happened, in UTC.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return events and active users per day, where a day is a calendar day in India.</p>
+<ul>
+<li>India Standard Time (IST) is UTC+05:30, all year. There is no daylight saving.</li>
+<li><code>event_date</code> is the date of the event in IST. An event at 18:30:00 UTC is at
+  00:00:00 IST on the next day.</li>
+<li><code>events</code> is the number of events on that date.</li>
+<li><code>users</code> is the number of different users with at least one event on that date.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per India calendar day that has events.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_date</code></td>
+<td>DATE</td>
+<td>Date in IST.</td>
+</tr>
+<tr>
+<td><code>events</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>BIGINT</td>
+<td>Distinct users.</td>
+</tr>
+</tbody>
+</table>
+<h2>The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">F</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Daily events and active users for the India report.&quot;&quot;&quot;</span>
+    <span class="n">events</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;app_events&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Derive the calendar date of each event</span>
+    <span class="n">events</span> <span class="o">=</span> <span class="n">events</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;event_date&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">to_date</span><span class="p">(</span><span class="s2">&quot;event_ts&quot;</span><span class="p">))</span>
+
+    <span class="c1"># Count events and distinct users per day</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">events</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;event_date&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;events&quot;</span><span class="p">),</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">countDistinct</span><span class="p">(</span><span class="s2">&quot;user_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">events</span> <span class="o">=</span> <span class="n">events</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;event_date&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">to_date</span><span class="p">(</span><span class="s2">&quot;event_ts&quot;</span><span class="p">))</span>
+</code></pre></div>
+
+<p><code>event_ts</code> is in UTC. <code>to_date</code> cuts the time off and keeps the date, so <code>event_date</code>
+is the UTC date. The report is supposed to be per India calendar day.</p>
+<p>India is 5 hours 30 minutes ahead of UTC. From midnight to 05:29 in India, the UTC
+clock still shows the previous day. An event at 00:10 IST on 4 March is stored as
+18:40 UTC on 3 March, and the code books it on 3 March.</p>
+<p>In this data, 101 of the 302 events fall in that window and land on the wrong day.</p>
+<p>Why it passed review:</p>
+<ul>
+<li>The weekly total is exactly right. Every event is counted once; it is only in the
+  wrong bucket.</li>
+<li>The result has the same seven dates either way.</li>
+<li>Each daily number is plausible. On 3 March the event count is even identical by
+  coincidence (51 both ways), although the events behind it are not the same ones.</li>
+</ul>
+<h2>The fix</h2>
+<p>Shift the timestamp to India time first, then take the date:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">india_time</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;event_ts&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">F</span><span class="o">.</span><span class="n">expr</span><span class="p">(</span><span class="s2">&quot;INTERVAL 330 MINUTES&quot;</span><span class="p">)</span>
+<span class="n">events</span> <span class="o">=</span> <span class="n">events</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;event_date&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">to_date</span><span class="p">(</span><span class="n">india_time</span><span class="p">))</span>
+</code></pre></div>
+
+<p>The order matters. The date has to be derived from the shifted timestamp. Adding
+5.5 hours to something that is already a date does nothing useful.</p>
+<p>Spark also has a function for this:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">to_date</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">from_utc_timestamp</span><span class="p">(</span><span class="s2">&quot;event_ts&quot;</span><span class="p">,</span> <span class="s2">&quot;Asia/Kolkata&quot;</span><span class="p">))</span>
+</code></pre></div>
+
+<p>For India both give the same result, because IST has no daylight saving and the
+offset never changes. For a zone that does change its clocks, such as <code>Europe/London</code>
+or <code>America/New_York</code>, only the named time zone is correct: the offset is different in
+summer and winter, and a fixed interval would be wrong for half the year.</p>
+<p>Use the region name (<code>Asia/Kolkata</code>), not the abbreviation <code>IST</code>. Abbreviations are
+ambiguous: IST is also Irish Standard Time and Israel Standard Time.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Adding 5 hours, or 6.</strong> India's offset has a half hour in it. Both versions give
+seven rows with wrong numbers, because events in the remaining half hour are still on
+the wrong side of midnight.</p>
+<p><strong>Subtracting instead of adding.</strong> Returns 8 rows: the dates move the wrong way and a
+28 February appears. To go from UTC to a zone that is ahead of UTC, add.</p>
+<p><strong>Changing the session time zone and hoping.</strong> <code>event_ts</code> is a <code>TIMESTAMP_NTZ</code>, a
+timestamp without a time zone. Spark does not convert it when
+<code>spark.sql.session.timeZone</code> changes; it is just a date and a time. The conversion has
+to be written explicitly.</p>
+<h2>The broader lesson</h2>
+<p>Store timestamps in UTC, and convert at the last moment, for the audience of the
+report. And say in the column name or its description which zone a date belongs to.
+"<code>event_date</code>" in a table used by teams in three countries will be read three ways.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Events between 18:30 and 23:59 UTC</td>
+<td>101 events</td>
+<td>The bug itself.</td>
+</tr>
+<tr>
+<td>An event at exactly 18:30:00 UTC</td>
+<td>3 March</td>
+<td>It is midnight IST: it belongs to 4 March.</td>
+</tr>
+<tr>
+<td>An event at 18:29:59 UTC</td>
+<td>3 March</td>
+<td>One second earlier: still 3 March in India.</td>
+</tr>
+<tr>
+<td>Same seven dates in UTC and IST</td>
+<td>whole data set</td>
+<td>Shows that a row count check proves nothing here.</td>
+</tr>
+<tr>
+<td>Events between 18:00 and 18:30 UTC</td>
+<td>several</td>
+<td>Adding 6 hours instead of 5:30.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

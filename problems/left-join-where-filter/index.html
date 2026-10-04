@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The LEFT JOIN that a WHERE clause quietly undoes | SQL problem | NullTrap</title>
+  <meta name="description" content="Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/left-join-where-filter/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The LEFT JOIN that a WHERE clause quietly undoes | SQL problem | NullTrap">
+  <meta property="og:description" content="Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/left-join-where-filter/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>13. The LEFT JOIN that a WHERE clause quietly undoes</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge">left join</span><span class="badge">on vs where</span><span class="badge">count</span><span class="badge">coalesce</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/013-left-join-where-filter.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="left-join-where-filter" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Account managers get a monthly list of all their customers with how much each one
+bought. Customers who bought nothing matter most on that list, because those are the
+ones to call.</p>
+<p>Last month's list was short. Every customer on it had bought something.</p>
+<h2>Input tables</h2>
+<h3><code>customers</code></h3>
+<p>One row per customer.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>Unique per customer.</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>STRING</td>
+<td>Customer name.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>Customer city.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>orders</code></h3>
+<p>One row per order.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who ordered. A few orders belong to customers that are not in <code>customers</code>.</td>
+</tr>
+<tr>
+<td><code>order_date</code></td>
+<td>DATE</td>
+<td>Date of the order.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>STRING</td>
+<td><code>COMPLETED</code>, <code>CANCELLED</code> or <code>PENDING</code>. Can be NULL.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Order value in rupees.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return every customer in <code>customers</code> with their completed orders of March 2025.</p>
+<ul>
+<li>Only orders with <code>status</code> = <code>COMPLETED</code> and an <code>order_date</code> from 1 March 2025 to
+  31 March 2025 (both included) count.</li>
+<li><code>completed_orders</code> is the number of such orders. <code>completed_amount</code> is their total.</li>
+<li>A customer with no such order still appears, with <code>completed_orders</code> = 0 and
+  <code>completed_amount</code> = 0.00.</li>
+<li>Orders of customers that are not in <code>customers</code> are ignored.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per customer in <code>customers</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>completed_orders</code></td>
+<td>BIGINT</td>
+<td>0 if none.</td>
+</tr>
+<tr>
+<td><code>completed_amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>0.00 if none.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "left-join-where-filter", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customers", "url": "../../data/013-left-join-where-filter/customers.parquet"}, {"name": "orders", "url": "../../data/013-left-join-where-filter/orders.parquet"}], "starter": "-- Tables: customers, orders\nSELECT *\nFROM customers\nLIMIT 10", "expected": {"columns": ["completed_amount", "completed_orders", "customer_id", "name"], "row_count": 40, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"completed_amount\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"completed_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"name\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "26c80951ae9bc2de272a41e19f1682298949f131046850a760d86669447b0f7b", "column_checks": [{"name": "completed_amount", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"completed_amount\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "7e4a3440414075a004d3ad7ae7ad5ab33cc0c302c344504d1db75cee047510ba"}, {"name": "completed_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"completed_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "425f103c9644ead4722c30dd100ecd2fbbbcee521e8b4ac89ae27548d1c1fdfd"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "01dec9ef2a42903518a850dffad165f2920a3881c2faa2cc969e474fff737a2a"}, {"name": "name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "78c8316d76dd608172266eb32ede8239257bf2470191163a329fa4aa8035e80d"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>A <code>LEFT JOIN</code> keeps every row of the left table. For a customer with no matching
+order, it produces one row with NULL in every <code>orders</code> column.</p>
+<p>What happens to that row next depends on where the conditions are.</p>
+<p><strong>In the <code>ON</code> clause</strong>, a condition decides which orders count as a match:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="n">customers</span><span class="w"> </span><span class="k">c</span>
+<span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="n">o</span>
+<span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">customer_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">customer_id</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;COMPLETED&#39;</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">order_date</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-03-01&#39;</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">order_date</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-04-01&#39;</span>
+</code></pre></div>
+
+<p>A customer with no completed March order matches nothing and keeps their row, with
+NULLs. That is the row the report needs.</p>
+<p><strong>In the <code>WHERE</code> clause</strong>, the same condition is applied after the join, to the joined
+rows:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="n">customers</span><span class="w"> </span><span class="k">c</span>
+<span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="n">o</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">customer_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">customer_id</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;COMPLETED&#39;</span><span class="w"> </span><span class="p">...</span>
+</code></pre></div>
+
+<p>For the customer with no orders, <code>o.status</code> is NULL. <code>NULL = 'COMPLETED'</code> is not true,
+so the row is removed. The <code>LEFT JOIN</code> did its job and the <code>WHERE</code> threw the result
+away. The query now behaves exactly like an inner join.</p>
+<p>The rule: conditions on the <strong>right</strong> table of a left join belong in <code>ON</code>. Conditions
+on the <strong>left</strong> table belong in <code>WHERE</code>.</p>
+<p>The rest of the query is two more NULL details:</p>
+<ul>
+<li><code>COUNT(o.order_id)</code> counts matched orders. <code>COUNT(*)</code> would count the NULL row too.</li>
+<li><code>SUM</code> over no rows is NULL, so it is wrapped in <code>COALESCE(..., 0)</code>.</li>
+</ul>
+<p>There are 40 customers. 18 of them have no completed order in March.</p>
+<h2>Common wrong answers</h2>
+<p><strong>The conditions in <code>WHERE</code>.</strong> Returns 22 rows. The 18 customers with nothing to show
+are gone, and those were the ones the account managers wanted.</p>
+<p><strong><code>COUNT(*)</code>.</strong> Returns 40 rows, but every customer with no orders shows
+<code>completed_orders</code> = 1. The NULL row is still a row.</p>
+<p><strong>No <code>COALESCE</code>.</strong> <code>completed_amount</code> is NULL instead of 0.00 for those 18 customers.</p>
+<p><strong><code>status &lt;&gt; 'CANCELLED'</code> instead of <code>= 'COMPLETED'</code>.</strong> Counts <code>PENDING</code> orders as
+completed. It also shows why negative conditions are risky with NULLs: an order with a
+NULL status is not counted either way, because <code>NULL &lt;&gt; 'CANCELLED'</code> is NULL. If the
+intent was "everything except cancelled", those orders would be silently lost.</p>
+<p><strong>Starting from <code>orders</code>.</strong> Any query that begins <code>FROM orders</code> can only return
+customers who have orders. It returns 23 rows here, one of them for customer 9999,
+who is not in <code>customers</code> at all.</p>
+<h2>The PySpark version of the same bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">customers</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">orders</span><span class="p">,</span> <span class="s2">&quot;customer_id&quot;</span><span class="p">,</span> <span class="s2">&quot;left&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;COMPLETED&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>A <code>filter</code> after a left join is a <code>WHERE</code>. Filter <code>orders</code> first, then join.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Customers</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No orders at all</td>
+<td>1037 to 1040</td>
+<td>Conditions in <code>WHERE</code>; <code>COUNT(*)</code>.</td>
+</tr>
+<tr>
+<td>March orders, all cancelled</td>
+<td>1035</td>
+<td>Conditions in <code>WHERE</code>.</td>
+</tr>
+<tr>
+<td>March orders with <code>PENDING</code> or NULL status</td>
+<td>1036</td>
+<td><code>status &lt;&gt; 'CANCELLED'</code>.</td>
+</tr>
+<tr>
+<td>Completed orders on 28 February and 1 April</td>
+<td>1034</td>
+<td>A date range that is one day too wide.</td>
+</tr>
+<tr>
+<td>Completed orders on 1 March and 31 March</td>
+<td>1033</td>
+<td>A date range that is one day too narrow.</td>
+</tr>
+<tr>
+<td>Orders for a customer not in <code>customers</code></td>
+<td>9999</td>
+<td>Driving the query from <code>orders</code>.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

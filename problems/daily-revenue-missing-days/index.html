@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily revenue with the missing days filled in | SQL problem | NullTrap</title>
+  <meta name="description" content="Produce one row per store per day of March with Spark SQL, showing 0 on days without sales. A GROUP BY can only return days that have data; the missing days have to come from a calendar table.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/daily-revenue-missing-days/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Daily revenue with the missing days filled in | SQL problem | NullTrap">
+  <meta property="og:description" content="Produce one row per store per day of March with Spark SQL, showing 0 on days without sales. A GROUP BY can only return days that have data; the missing days have to come from a calendar table.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/daily-revenue-missing-days/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>15. Daily revenue with the missing days filled in</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">date spine</span><span class="badge">calendar table</span><span class="badge">cross join</span><span class="badge">left join</span><span class="badge">gaps</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/015-daily-revenue-missing-days.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="daily-revenue-missing-days" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>A dashboard draws daily revenue per store as a line chart. The chart library connects
+the points it is given. When a store has no sales on a day, there is no point for that
+day, and the line runs straight from the day before to the day after. A closed store
+looks like a normal day.</p>
+<p>The chart needs a row for every store and every day, with 0 where nothing was sold.</p>
+<h2>Input tables</h2>
+<h3><code>stores</code></h3>
+<p>One row per store.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td>Unique per store.</td>
+</tr>
+<tr>
+<td><code>store_name</code></td>
+<td>STRING</td>
+<td>Display name.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>calendar</code></h3>
+<p>One row per calendar day, from 1 January 2025 to 30 June 2025.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cal_date</code></td>
+<td>DATE</td>
+<td>The day.</td>
+</tr>
+<tr>
+<td><code>is_weekend</code></td>
+<td>BOOLEAN</td>
+<td>True on Saturdays and Sundays.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>sales</code></h3>
+<p>One row per sale. A store can have several sales on a day, or none.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sale_id</code></td>
+<td>BIGINT</td>
+<td>Unique per sale.</td>
+</tr>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td>The store.</td>
+</tr>
+<tr>
+<td><code>sale_date</code></td>
+<td>DATE</td>
+<td>Date of the sale.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Sale value in rupees.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return daily revenue for March 2025.</p>
+<ul>
+<li>One row for every store in <code>stores</code> and every day from 1 March 2025 to
+  31 March 2025, both included. That is 31 rows per store.</li>
+<li><code>revenue</code> is the sum of the store's sales on that day, and 0.00 if it had none.</li>
+<li>A store with no sales in March at all still gets its 31 rows.</li>
+<li>Sales outside March do not appear.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per store per day of March.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>sale_date</code></td>
+<td>DATE</td>
+<td>A day of March 2025.</td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td>0.00 on days without sales.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "daily-revenue-missing-days", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "calendar", "url": "../../data/015-daily-revenue-missing-days/calendar.parquet"}, {"name": "sales", "url": "../../data/015-daily-revenue-missing-days/sales.parquet"}, {"name": "stores", "url": "../../data/015-daily-revenue-missing-days/stores.parquet"}], "starter": "-- Tables: calendar, sales, stores\nSELECT *\nFROM calendar\nLIMIT 10", "expected": {"columns": ["revenue", "sale_date", "store_id"], "row_count": 186, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"sale_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "516e172ad0751bdf979505345c21a4dc1b4db7175e5a186a96e8652d19cebd96", "column_checks": [{"name": "revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "eb05dd962db0a4e68d0f7220d728b020322d855e979fb73bca06818063e14fca"}, {"name": "sale_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"sale_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "9d8dfd577ab02d0bf778dd00e736528e7663359fc0d4c72fafa667c6da34be4d"}, {"name": "store_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "3394c429df41f9d31f964439ab6e958def996cb76749704722d8b023c108ed76"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p><code>GROUP BY store_id, sale_date</code> produces one row for every combination that exists in
+<code>sales</code>. A day without sales has no rows, so there is nothing to group and nothing to
+output. No amount of <code>COALESCE</code> helps: <code>COALESCE</code> replaces a NULL value in a row that
+exists. It cannot create a row.</p>
+<p>The rows have to come from somewhere else. The complete list of (store, day) pairs is
+built from two tables that do have every store and every day:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="n">stores</span><span class="w"> </span><span class="n">s</span>
+<span class="k">CROSS</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">calendar</span><span class="w"> </span><span class="k">c</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">cal_date</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-03-01&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">cal_date</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-04-01&#39;</span>
+</code></pre></div>
+
+<p>Six stores times 31 days is 186 rows. This list is sometimes called a date spine.
+Then the sales are attached to it with a left join, and the missing ones become 0:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">daily</span><span class="w"> </span><span class="n">d</span>
+<span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">store_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">store_id</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">sale_date</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">cal_date</span>
+<span class="p">...</span>
+<span class="k">COALESCE</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="n">revenue</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>daily</code> is the sales summed per store and day beforehand. Aggregating before the join
+keeps one row per (store, day) on both sides, so the join cannot multiply anything.</p>
+<p>Of the 186 rows, 77 are days without sales.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>GROUP BY</code> on <code>sales</code> alone.</strong> Returns 109 rows: only the days that have sales. This
+is the chart with the misleading straight lines.</p>
+<p><strong>Taking the list of stores from <code>sales</code>.</strong> Returns 155 rows. Store 6 had no sales in
+March, so a list of stores built from March sales does not contain it, and all 31 of
+its rows are missing. A store that sold nothing all month is exactly what the
+dashboard should show.</p>
+<p><strong>Joining raw sales to the spine without aggregating.</strong> Returns 311 rows. A day with
+three sales becomes three rows. Either aggregate first, as above, or <code>GROUP BY</code> the
+spine columns after the join.</p>
+<p><strong>Filtering the sales date in <code>WHERE</code>.</strong> Something like
+<code>WHERE x.sale_date &gt;= DATE '2025-03-01'</code> after the left join removes every spine row
+that found no sale, because its <code>sale_date</code> is NULL. Back to 109 rows. The date range
+belongs on the calendar, which is the left side. (Problem 13 is about this mistake.)</p>
+<p><strong>Forgetting the calendar filter.</strong> Returns 1,086 rows: every store for every day of
+the six-month calendar.</p>
+<p><strong>No <code>COALESCE</code>.</strong> 186 rows, with NULL instead of 0.00 on the 77 empty days. Many
+chart libraries skip NULL points, which brings the original problem back.</p>
+<h2>Where the calendar comes from</h2>
+<p>Here it is a table, as it is in most warehouses: a date dimension is one of the first
+tables anyone builds. Without one, Spark can generate the days:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">explode</span><span class="p">(</span><span class="n">sequence</span><span class="p">(</span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-03-01&#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">DATE</span><span class="w"> </span><span class="s1">&#39;2025-03-31&#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">DAY</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">cal_date</span>
+</code></pre></div>
+
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Days without sales</td>
+<td>77 of 186 store-days</td>
+<td><code>GROUP BY</code> on <code>sales</code> alone.</td>
+</tr>
+<tr>
+<td>A store with no sales in March</td>
+<td>store 6</td>
+<td>Building the store list from <code>sales</code>.</td>
+</tr>
+<tr>
+<td>Several sales on one day</td>
+<td>most open days</td>
+<td>Joining before aggregating.</td>
+</tr>
+<tr>
+<td>Sales on 28 February and 1 April</td>
+<td>store 1</td>
+<td>A date range that is one day too wide.</td>
+</tr>
+<tr>
+<td>Sales on 1 March and 31 March</td>
+<td>store 1</td>
+<td>A date range that is one day too narrow.</td>
+</tr>
+<tr>
+<td>Calendar covers January to June</td>
+<td><code>calendar</code></td>
+<td>Forgetting to restrict the spine.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

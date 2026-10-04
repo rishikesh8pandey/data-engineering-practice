@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Month-over-month change when a month is missing | SQL problem | NullTrap</title>
+  <meta name="description" content="Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/month-over-month-gaps/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Month-over-month change when a month is missing | SQL problem | NullTrap">
+  <meta property="og:description" content="Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/month-over-month-gaps/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>16. Month-over-month change when a month is missing</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">lag</span><span class="badge">month over month</span><span class="badge">window functions</span><span class="badge">gaps</span><span class="badge">time series</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/016-month-over-month-gaps.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="month-over-month-gaps" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Finance tracks how each subscription plan's revenue changes from one month to the
+next. The source table only has a row for a plan in a month when the plan earned
+something.</p>
+<p>The current report shows the Standard plan jumping sharply in December. It did not.
+The report compared December with October, because November has no row.</p>
+<h2>Input tables</h2>
+<h3><code>monthly_revenue</code></h3>
+<p>One row per plan and month in which the plan had revenue. Months with no revenue
+have no row.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plan_name</code></td>
+<td>STRING</td>
+<td>The subscription plan.</td>
+</tr>
+<tr>
+<td><code>revenue_month</code></td>
+<td>DATE</td>
+<td>The first day of the month.</td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Revenue of the plan in that month.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return every row of <code>monthly_revenue</code> with the previous month's revenue next to it.</p>
+<ul>
+<li><code>prev_month_revenue</code> is the plan's revenue in the calendar month immediately
+  before <code>revenue_month</code>. January 2025 is compared with December 2024.</li>
+<li>If the plan has no row for that previous month, <code>prev_month_revenue</code> is NULL.
+  Never compare with a month further back.</li>
+<li><code>revenue_change</code> is <code>revenue</code> minus <code>prev_month_revenue</code>, and NULL when
+  <code>prev_month_revenue</code> is NULL.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per row of <code>monthly_revenue</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plan_name</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>revenue_month</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>prev_month_revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td>NULL if the plan has no row for the previous month.</td>
+</tr>
+<tr>
+<td><code>revenue_change</code></td>
+<td>DECIMAL(13,2)</td>
+<td>NULL if <code>prev_month_revenue</code> is NULL.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "month-over-month-gaps", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "monthly_revenue", "url": "../../data/016-month-over-month-gaps/monthly_revenue.parquet"}], "starter": "-- Tables: monthly_revenue\nSELECT *\nFROM monthly_revenue\nLIMIT 10", "expected": {"columns": ["plan_name", "prev_month_revenue", "revenue", "revenue_change", "revenue_month"], "row_count": 64, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"plan_name\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"prev_month_revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue_change\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue_month\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "b48052f5efba1211e6e6dd9b710119682028dd4de64508cd4221c96372b702ab", "column_checks": [{"name": "plan_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"plan_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "017d3a18f8c1bb11b63b67c84a8a8ec3f77e5851a629429d1994e7f2bcc8c9c5"}, {"name": "prev_month_revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"prev_month_revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2f2315effefa83db42186d5a15364e204808b2becddc9940a948e571d8c82325"}, {"name": "revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "d2e2464368c4f2f1c4fff96802487a1c53f0ce7f636da150b684f25c5b65aeb4"}, {"name": "revenue_change", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue_change\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "d3691301fcf4ad4c3cdec2eda6c7eb5b71f42d7d9d41a73ad3a6d3106bbf0a16"}, {"name": "revenue_month", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue_month\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "8c914335198b9a8d43b04d21a9668f752534a9b1d2ebd625d9f33b223cba0f02"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p><code>LAG(revenue)</code> returns the value from the previous <strong>row</strong> of the window. Ordered by
+month, the previous row is the previous month only if no month is missing.</p>
+<p>The Standard plan has rows for October and December but not November. For the December
+row, <code>LAG</code> returns October's revenue. The number is real, the label "previous month"
+is not.</p>
+<p>The fix is to check what the previous row actually is before using it:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">CASE</span>
+<span class="w">    </span><span class="k">WHEN</span><span class="w"> </span><span class="n">LAG</span><span class="p">(</span><span class="n">revenue_month</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">plan_name</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">revenue_month</span><span class="p">)</span>
+<span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="n">revenue_month</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">MONTH</span>
+<span class="w">    </span><span class="k">THEN</span><span class="w"> </span><span class="n">LAG</span><span class="p">(</span><span class="n">revenue</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">plan_name</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">revenue_month</span><span class="p">)</span>
+<span class="k">END</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">prev_month_revenue</span>
+</code></pre></div>
+
+<p>If the previous row is exactly one month earlier, use its revenue. Otherwise the
+<code>CASE</code> has no matching branch and returns NULL.</p>
+<p><code>revenue_change</code> then needs no special handling. A number minus NULL is NULL, which is
+what the requirement asks for.</p>
+<p>The table has 64 rows for 6 plans. 10 rows have no previous month: the first row of
+each plan, and 4 rows that follow a gap.</p>
+<h2>An equally good solution</h2>
+<p>A self-join says the same thing more directly:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">plan_name</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">revenue_month</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">revenue</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">revenue</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">prev_month_revenue</span><span class="p">,</span><span class="w"> </span><span class="p">...</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">monthly_revenue</span><span class="w"> </span><span class="n">a</span>
+<span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">monthly_revenue</span><span class="w"> </span><span class="n">b</span>
+<span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">plan_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">plan_name</span>
+<span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">revenue_month</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">revenue_month</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">MONTH</span>
+</code></pre></div>
+
+<p>It looks up the row for the previous month and finds nothing if it does not exist. It
+must be a left join, or every row without a previous month disappears.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Plain <code>LAG(revenue)</code>.</strong> Row count is right, and 4 rows are wrong: the ones after a
+gap are compared with a month two or three months back. Sixty rows are correct, which
+is why this survives a casual check. Whenever a report says "previous period", ask
+whether the data is guaranteed to have every period.</p>
+<p><strong>Joining on the month number.</strong> <code>MONTH(b.revenue_month) = MONTH(a.revenue_month) - 1</code>
+with the same year works from February to December and fails every January: month 1
+minus 1 is 0, and no month has number 0. December of the previous year is never
+found. Use date arithmetic, not arithmetic on parts of a date.</p>
+<p><strong>Inner self-join.</strong> Returns 54 rows. The 10 rows without a previous month are
+dropped, including the first month of every plan.</p>
+<p><strong><code>COALESCE(prev_month_revenue, 0)</code> in the subtraction.</strong> Makes <code>revenue_change</code> equal
+to the full revenue wherever there is no previous month. A new plan appears to have
+grown from nothing by its entire revenue, and a plan with a missing month appears to
+have had a huge jump. Unknown is not zero.</p>
+<h2>An alternative: fill the gaps first</h2>
+<p>If the report needs a row for the missing months too (showing revenue 0), build the
+complete list of plan and month pairs first, as in problem 15, and then plain <code>LAG</code>
+is correct because no row is missing any more. Which approach is right depends on
+whether "no row" means "zero revenue" or "we do not know".</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Plan</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One month missing in the middle</td>
+<td>Standard (November)</td>
+<td>Plain <code>LAG</code>.</td>
+</tr>
+<tr>
+<td>January missing</td>
+<td>Premium</td>
+<td>Plain <code>LAG</code>, across the year boundary.</td>
+</tr>
+<tr>
+<td>December missing</td>
+<td>Enterprise</td>
+<td>Plain <code>LAG</code>; January must show NULL.</td>
+</tr>
+<tr>
+<td>Two months missing in a row</td>
+<td>Student (February, March)</td>
+<td>Comparing April with January.</td>
+</tr>
+<tr>
+<td>Complete across December to January</td>
+<td>Basic</td>
+<td>Month-number arithmetic that breaks in January.</td>
+</tr>
+<tr>
+<td>Plan that starts later than the others</td>
+<td>Family (October)</td>
+<td>Its first row has no previous month.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

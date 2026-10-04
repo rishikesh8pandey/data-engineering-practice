@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order totals that grow after explode | PySpark problem | NullTrap</title>
+  <meta name="description" content="Summarise orders that carry a nested array of items with PySpark. After explode() each order is repeated once per item, so order-level values such as shipping fees get counted several times, and orders with no items vanish.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/explode-double-count/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Order totals that grow after explode | PySpark problem | NullTrap">
+  <meta property="og:description" content="Summarise orders that carry a nested array of items with PySpark. After explode() each order is repeated once per item, so order-level values such as shipping fees get counted several times, and orders with no items vanish.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/explode-double-count/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>17. Order totals that grow after explode</h1>
+  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Fan-out trap</span><span class="badge">explode</span><span class="badge">arrays</span><span class="badge">nested data</span><span class="badge">grain</span><span class="badge">aggregation</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/017-explode-double-count.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="explode-double-count" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Orders arrive as JSON and are stored with the line items nested inside each order.
+The finance team needs one summary row per customer that mixes two kinds of numbers:
+values that belong to the order (how many orders, what was charged for shipping) and
+values that belong to the items (units and item value).</p>
+<h2>Input tables</h2>
+<h3><code>orders</code></h3>
+<p>One row per order.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who ordered.</td>
+</tr>
+<tr>
+<td><code>shipping_fee</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Charged once per order. Can be 0.00.</td>
+</tr>
+<tr>
+<td><code>items</code></td>
+<td>ARRAY&lt;STRUCT&lt;sku: STRING, qty: INT, unit_price: DECIMAL(10,2)&gt;&gt;</td>
+<td>The line items. Can be an empty array, and can be NULL.</td>
+</tr>
+</tbody>
+</table>
+<p>Run <code>orders.printSchema()</code> to see the nested structure.</p>
+<h2>Requirement</h2>
+<p>Return one row per customer.</p>
+<ul>
+<li><code>orders</code> is the number of the customer's orders, whatever their items look like.</li>
+<li><code>shipping_total</code> is the sum of <code>shipping_fee</code> over those orders. Each order's fee
+  counts once.</li>
+<li><code>items_value</code> is the sum of <code>qty</code> times <code>unit_price</code> over all items of all the
+  customer's orders.</li>
+<li><code>total_units</code> is the sum of <code>qty</code> over those items.</li>
+<li>An order with an empty or NULL <code>items</code> array still counts as an order and its
+  shipping fee still counts. It adds nothing to <code>items_value</code> and <code>total_units</code>.</li>
+<li>A customer whose orders have no items at all has <code>items_value</code> = 0.00 and
+  <code>total_units</code> = 0.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per customer.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>orders</code></td>
+<td>BIGINT</td>
+<td>Number of orders.</td>
+</tr>
+<tr>
+<td><code>items_value</code></td>
+<td>DECIMAL(14,2)</td>
+<td>Sum of qty times unit_price.</td>
+</tr>
+<tr>
+<td><code>shipping_total</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Sum of shipping fees, once per order.</td>
+</tr>
+<tr>
+<td><code>total_units</code></td>
+<td>BIGINT</td>
+<td>Sum of qty.</td>
+</tr>
+</tbody>
+</table>
+
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p><code>orders</code> has one row per order. After <code>explode("items")</code> the DataFrame has one row per
+item, and every order-level column is copied onto each of those rows. An order with
+four items now has its <code>shipping_fee</code> four times.</p>
+<p>That is the same thing a one-to-many join does (problem 1), without a join in sight.
+The rule is also the same: a value may only be summed at the grain it belongs to.</p>
+<p>This report needs values at two grains, so it needs two aggregations:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Order grain: one row per order, straight from the table.</span>
+<span class="n">order_level</span> <span class="o">=</span> <span class="n">orders</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;orders&quot;</span><span class="p">),</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;shipping_fee&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;shipping_total&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="c1"># Item grain: one row per item, after the explode.</span>
+<span class="n">items</span> <span class="o">=</span> <span class="n">orders</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">explode</span><span class="p">(</span><span class="s2">&quot;items&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;item&quot;</span><span class="p">))</span>
+<span class="n">item_level</span> <span class="o">=</span> <span class="n">items</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;item.qty&quot;</span><span class="p">)</span> <span class="o">*</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;item.unit_price&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;items_value&quot;</span><span class="p">),</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;item.qty&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;total_units&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>Then join the two on <code>customer_id</code>, with <code>order_level</code> on the left. A customer whose
+orders have no items is missing from <code>item_level</code>, so the item columns come back NULL
+and are replaced with 0.</p>
+<p>There are 118 orders from 25 customers. 5 orders have an empty <code>items</code> array and 4
+have none at all.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Explode, then aggregate everything in one <code>groupBy</code>.</strong> Shipping is counted once per
+item. The true shipping total across all orders is 6,518.00; summed after the explode
+it is 16,249.00. <code>count("*")</code> counts items, not orders. And the result has 24 rows
+instead of 25: customer 324's only order has an empty array, <code>explode</code> produces no row
+for it, and the customer vanishes.</p>
+<p><strong>Fixing the count with <code>countDistinct("order_id")</code>.</strong> The order count is now right
+for the orders that survive the explode, and shipping is still wrong. This is the
+half-fix to watch for: one symptom is treated and the cause stays.</p>
+<p><strong><code>explode_outer</code> instead of <code>explode</code>.</strong> <code>explode_outer</code> keeps orders with an empty
+or NULL array, as one row with a NULL item. That brings customer 324 back, so the row
+count is 25. Shipping is still summed once per item for every order with more than
+one item. <code>explode_outer</code> fixes the lost rows; it does nothing about the repeated
+ones.</p>
+<p><strong>Dividing shipping by the number of items.</strong> Spreading the fee across the item rows
+and summing it back can be made to work, but it breaks on orders with no items (a
+division by zero, or a lost fee) and on rounding. Aggregating at the right grain is
+simpler and exact.</p>
+<h2>Without an explode at all</h2>
+<p>Spark can also aggregate inside the array, with the higher-order function
+<code>F.aggregate</code>, which computes one value per order from its <code>items</code> without changing
+the number of rows. After that, every column is at the order grain and a single
+<code>groupBy</code> is correct. A NULL array still gives NULL, so it needs a <code>coalesce</code>.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Orders with more than one item</td>
+<td>71 of 118 orders</td>
+<td>Shipping fee summed once per item.</td>
+</tr>
+<tr>
+<td>Orders with exactly one item</td>
+<td>38 orders</td>
+<td>These come out right either way, which hides the bug in small tests.</td>
+</tr>
+<tr>
+<td>Empty <code>items</code> array</td>
+<td>5 orders</td>
+<td><code>explode</code> drops the order and its shipping fee.</td>
+</tr>
+<tr>
+<td>NULL <code>items</code></td>
+<td>4 orders</td>
+<td>The same, and <code>size(items)</code> is not 0 for these.</td>
+</tr>
+<tr>
+<td>Customer whose only order has no items</td>
+<td>324</td>
+<td>The customer disappears from the result.</td>
+</tr>
+<tr>
+<td>One order without items, one with</td>
+<td>325</td>
+<td>The order count and the shipping total must include both.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

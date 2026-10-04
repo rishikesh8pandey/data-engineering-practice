@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The average rating where NULL is not zero | SQL problem | NullTrap</title>
+  <meta name="description" content="Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-rating-nulls/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The average rating where NULL is not zero | SQL problem | NullTrap">
+  <meta property="og:description" content="Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-rating-nulls/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>12. The average rating where NULL is not zero</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge">aggregation</span><span class="badge">count</span><span class="badge">avg</span><span class="badge">nulls</span><span class="badge">coalesce</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/012-average-rating-nulls.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="average-rating-nulls" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>Customers can leave a written review without giving a star rating. The product page
+shows three numbers per product: how many reviews it has, how many of those carry a
+rating, and the average rating.</p>
+<p>A previous version of this report showed products with good reviews at 2.9 stars.
+Somebody had "cleaned" the missing ratings first.</p>
+<h2>Input tables</h2>
+<h3><code>reviews</code></h3>
+<p>One row per review.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>review_id</code></td>
+<td>BIGINT</td>
+<td>Unique per review.</td>
+</tr>
+<tr>
+<td><code>product_id</code></td>
+<td>BIGINT</td>
+<td>The product being reviewed.</td>
+</tr>
+<tr>
+<td><code>rating</code></td>
+<td>INT</td>
+<td>1 to 5 stars. NULL means the customer wrote a review without rating the product.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return one row per product.</p>
+<ul>
+<li><code>total_reviews</code> is the number of reviews of the product, rated or not.</li>
+<li><code>rated_reviews</code> is the number of reviews that have a rating.</li>
+<li><code>avg_rating</code> is the average of the ratings that exist. A review without a rating
+  does not count as zero stars; it does not count at all.</li>
+<li>A product with no rated reviews has <code>rated_reviews</code> = 0 and <code>avg_rating</code> = NULL.</li>
+<li>Do not round <code>avg_rating</code>.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per product.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>product_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>total_reviews</code></td>
+<td>BIGINT</td>
+<td>All reviews.</td>
+</tr>
+<tr>
+<td><code>rated_reviews</code></td>
+<td>BIGINT</td>
+<td>Reviews with a rating.</td>
+</tr>
+<tr>
+<td><code>avg_rating</code></td>
+<td>DOUBLE</td>
+<td>Average rating. NULL if no review is rated.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "average-rating-nulls", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "reviews", "url": "../../data/012-average-rating-nulls/reviews.parquet"}], "starter": "-- Tables: reviews\nSELECT *\nFROM reviews\nLIMIT 10", "expected": {"columns": ["avg_rating", "product_id", "rated_reviews", "total_reviews"], "row_count": 30, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(round(\"avg_rating\", 6) AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"rated_reviews\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"total_reviews\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "1a4d2bd2ce33633925c106ada484080d845c81c215552828555165d731f83436", "column_checks": [{"name": "avg_rating", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"avg_rating\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2172c55cd958cfd9e2e6b044cf6e994db6ba875d27629a8591b6cfd1849fa16c"}, {"name": "product_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f0edaab10bac3f350458ed9c433379bbb5928169dbb4e941aa85e7d5392fb74c"}, {"name": "rated_reviews", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"rated_reviews\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6cee3d3b275053890c13c0c5f61d6e2b15a8a34896b6124bd15c644acf59f642"}, {"name": "total_reviews", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"total_reviews\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6e708aae6b5a9170ffe067d69f556ffc78cdf6a1c59494ef2ec6a06073d666e4"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span>
+<span class="w">    </span><span class="n">product_id</span><span class="p">,</span>
+<span class="w">    </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">total_reviews</span><span class="p">,</span>
+<span class="w">    </span><span class="k">COUNT</span><span class="p">(</span><span class="n">rating</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">rated_reviews</span><span class="p">,</span>
+<span class="w">    </span><span class="k">AVG</span><span class="p">(</span><span class="n">rating</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_rating</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">reviews</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">product_id</span>
+</code></pre></div>
+
+<p>The query is four lines. The point is knowing exactly what each aggregate does with
+NULL:</p>
+<ul>
+<li><code>COUNT(*)</code> counts rows. It does not look at any column.</li>
+<li><code>COUNT(rating)</code> counts the rows where <code>rating</code> is not NULL.</li>
+<li><code>AVG(rating)</code> is the sum of the non-NULL ratings divided by the number of non-NULL
+  ratings. NULL rows are not part of the sum and not part of the count.</li>
+<li><code>AVG</code> over no values at all is NULL, not 0.</li>
+</ul>
+<p>So the default behaviour is already what the requirement asks for. Every wrong answer
+to this problem comes from "handling" the NULLs when they needed no handling.</p>
+<p>The table has 203 reviews of 30 products. 49 reviews carry no rating.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>AVG(COALESCE(rating, 0))</code>.</strong> This turns "no rating" into "zero stars" and then
+averages it in. Across the whole table the average rating is 3.49; with the NULLs
+replaced by 0 it becomes 2.65. This is how a product with good reviews ends up at
+2.9 stars. NULL means unknown. Replacing it with 0 states something that nobody said.</p>
+<p><strong><code>SUM(rating) / COUNT(*)</code>.</strong> The same mistake by another route. <code>SUM</code> skips the NULLs
+but <code>COUNT(*)</code> does not, so the unrated reviews are in the denominator and not in the
+numerator.</p>
+<p><strong><code>COUNT(*)</code> for <code>rated_reviews</code>.</strong> Reports every review as rated. If you see two
+count columns in a report that are always equal, check whether one of them was meant
+to be <code>COUNT(column)</code>.</p>
+<p><strong>Filtering <code>WHERE rating IS NOT NULL</code> first.</strong> The average is now right, but
+<code>total_reviews</code> only counts rated reviews, and the result has 28 rows instead of 30.
+Products 828 and 829 have only unrated reviews, so the filter removes every row they
+have and they vanish from the report.</p>
+<p><strong><code>COALESCE(AVG(rating), 0)</code>.</strong> Shows products 828 and 829 with an average of 0. A
+product nobody has rated is not a zero-star product. Leave it NULL and let the page
+show "not rated yet".</p>
+<h2>A note on PySpark</h2>
+<p><code>F.count("*")</code> and <code>F.count("rating")</code> behave exactly like the SQL versions, and
+<code>F.avg</code> ignores NULLs too. <code>df.fillna(0)</code> before aggregating is the DataFrame version
+of the <code>COALESCE</code> mistake, and it is more dangerous because it changes every numeric
+column at once.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reviews without a rating</td>
+<td>49 of 203 rows</td>
+<td>Treating NULL as 0.</td>
+</tr>
+<tr>
+<td>Product with several reviews, none rated</td>
+<td>829</td>
+<td><code>WHERE rating IS NOT NULL</code> drops it; <code>COALESCE(AVG, 0)</code> shows 0.</td>
+</tr>
+<tr>
+<td>Product with a single unrated review</td>
+<td>828</td>
+<td>The same, with one row.</td>
+</tr>
+<tr>
+<td>Product with a single rated review</td>
+<td>830</td>
+<td>An average of one value.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

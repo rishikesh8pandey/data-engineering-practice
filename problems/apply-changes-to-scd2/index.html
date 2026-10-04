@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apply a batch of changes to an SCD2 table | PySpark problem | NullTrap</title>
+  <meta name="description" content="Merge a batch of customer changes into a type 2 slowly changing dimension with PySpark. Close old versions, open new ones, skip saves that changed nothing, handle several changes for one customer, and ignore changes that arrive too late.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/apply-changes-to-scd2/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Apply a batch of changes to an SCD2 table | PySpark problem | NullTrap">
+  <meta property="og:description" content="Merge a batch of customer changes into a type 2 slowly changing dimension with PySpark. Close old versions, open new ones, skip saves that changed nothing, handle several changes for one customer, and ignore changes that arrive too late.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/apply-changes-to-scd2/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>20. Apply a batch of changes to an SCD2 table</h1>
+  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">Late-data trap</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">merge</span><span class="badge">upsert</span><span class="badge">late-arriving data</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/020-apply-changes-to-scd2.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="apply-changes-to-scd2" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p><code>dim_customer</code> holds the history of each customer's city as a type 2 slowly changing
+dimension. Every night a batch of changes arrives from the CRM and has to be applied
+to it.</p>
+<p>The batch is what the CRM saw, not what the dimension needs. It contains saves that
+changed nothing, several changes for the same customer, customers the dimension has
+never seen, and changes that reached the feed weeks late.</p>
+<h2>Input tables</h2>
+<h3><code>dim_customer</code></h3>
+<p>The dimension before the batch. One row per version of a customer's city.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>The city during this version. Never NULL.</td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td>DATE</td>
+<td>First day of the version.</td>
+</tr>
+<tr>
+<td><code>valid_to</code></td>
+<td>DATE</td>
+<td>The day the next version started. NULL for the current version.</td>
+</tr>
+<tr>
+<td><code>is_current</code></td>
+<td>BOOLEAN</td>
+<td>True for the customer's latest version.</td>
+</tr>
+</tbody>
+</table>
+<p>The table is well formed: every customer has exactly one current row, one version
+ends on the day the next starts, and two consecutive versions never have the same city.</p>
+<h3><code>changes</code></h3>
+<p>The batch. One row per reported change. A customer has at most one row per date.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer. May be new to the dimension.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>The city reported. Never NULL.</td>
+</tr>
+<tr>
+<td><code>changed_on</code></td>
+<td>DATE</td>
+<td>The date the change took effect.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return the complete dimension as it should look after the batch: every existing
+version, updated where needed, plus the new versions.</p>
+<ul>
+<li><strong>Late changes are ignored.</strong> For a customer already in the dimension, a change
+  counts only if <code>changed_on</code> is after the <code>valid_from</code> of the customer's current
+  version. A change dated on or before it is discarded. For a customer who is new to
+  the dimension, every change counts.</li>
+<li><strong>Changes are applied in date order.</strong> Go through a customer's accepted changes
+  from the earliest <code>changed_on</code> to the latest.</li>
+<li><strong>A change to the same city is not a change.</strong> If the reported city equals the
+  city of the version in force at that point, nothing happens.</li>
+<li><strong>A real change closes one version and opens another.</strong> The version in force gets
+  <code>valid_to</code> = <code>changed_on</code> and <code>is_current</code> = false. A new version starts with
+  <code>valid_from</code> = <code>changed_on</code>.</li>
+<li><strong>A new customer</strong> gets a first version starting at their earliest change.</li>
+<li>After the batch, each customer's latest version has <code>valid_to</code> = NULL and
+  <code>is_current</code> = true. All others have <code>is_current</code> = false.</li>
+<li>Customers with no accepted change keep their rows exactly as they are.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per version, for all customers.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>valid_to</code></td>
+<td>DATE</td>
+<td>NULL for the current version.</td>
+</tr>
+<tr>
+<td><code>is_current</code></td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>The usual way to describe an SCD2 load is as a set of actions: close this row, insert
+that one. With several changes for one customer in a single batch, that turns into a
+loop, and loops are not what Spark is good at.</p>
+<p>A simpler way to see it: every version in the dimension, and every change in the
+batch, is the same kind of statement, "from this date the city is X". Put all of them
+in one list per customer, and the versions can be rebuilt from the list in one pass.</p>
+<p><strong>Step 1: discard the changes that are too late.</strong> A change counts if the customer is
+new, or if it is dated after the start of the customer's current version.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">current_from</span> <span class="o">=</span> <span class="n">dim</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;is_current&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+    <span class="s2">&quot;customer_id&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;valid_from&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;current_from&quot;</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">accepted</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">changes</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current_from</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;customer_id&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;current_from&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isNull</span><span class="p">()</span> <span class="o">|</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;changed_on&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;current_from&quot;</span><span class="p">)))</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Step 2: one timeline.</strong> Union the existing versions (with <code>valid_from</code> as the date)
+and the accepted changes.</p>
+<p><strong>Step 3: rebuild.</strong> Order each customer's entries by date. An entry starts a version
+if it is the first one, or if its city differs from the entry before it. Keep those,
+and a version's <code>valid_to</code> is the <code>valid_from</code> of the next one (<code>lead</code>). The last
+version has no next one, so its <code>valid_to</code> is NULL and it is the current row.</p>
+<p>This is the method from problem 4, applied to old and new entries together. Every rule
+of the requirement falls out of it:</p>
+<ul>
+<li>A save with the same city is not the start of a version, so it disappears.</li>
+<li>Several changes for one customer are just several entries in the list.</li>
+<li>A customer who moves away and back gets two new versions.</li>
+<li>A new customer's list contains only batch entries, and the first one starts their
+  first version.</li>
+<li>A customer with no accepted change has only their old entries, which rebuild to
+  exactly the rows they had.</li>
+</ul>
+<p>The dimension has 58 rows for 30 customers and the batch has 28 changes. After the
+batch there are 79 rows for 33 customers.</p>
+<h2>Why rebuilding is safe here</h2>
+<p>Rebuilding relies on the dimension being well formed, as the problem states: versions
+follow each other without gaps and consecutive versions differ. Then the old entries
+reproduce the old rows exactly. On a table with gaps or repeated cities this approach
+would silently "repair" them, which may or may not be wanted. In production, with a
+large dimension, you would also restrict the rebuild to the customers that appear in
+the batch and leave everyone else's rows untouched.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Applying late changes.</strong> Returns 82 rows. A change dated before the current version
+started gets inserted into the past, and the customer's history is rewritten with
+information that was already out of date when it arrived. Customers 923 and 925 each
+have one. Whether late changes should be ignored, or merged into history properly, is
+a business decision; here the rule is to ignore them.</p>
+<p><strong><code>&gt;=</code> instead of <code>&gt;</code>.</strong> Returns 80 rows. Customer 924 has a change dated on the day
+their current version started. Accepting it creates two entries on the same date, and
+a version that starts and ends on the same day.</p>
+<p><strong>Treating every accepted change as a new version.</strong> Returns 83 rows. Saves that
+changed nothing become versions, so the dimension grows every night without any real
+change, and "how many times did this customer move" gives the wrong answer.</p>
+<p><strong>Handling only one change per customer.</strong> Returns 75 rows. Taking each customer's
+latest change loses the versions in between. Seven customers have two changes in this
+batch.</p>
+<p><strong>Forgetting customers who are new.</strong> Returns 75 rows. If the late-change filter is
+written as an inner join to the current rows, a customer who is not in the dimension
+yet has no current row and is filtered out.</p>
+<p><strong>Inserting without closing.</strong> Returns 86 rows, with two or more rows marked current
+for the same customer. Any join that uses <code>is_current</code> now duplicates those customers.</p>
+<h2>In production: MERGE</h2>
+<p>On Delta Lake this is usually written as a <code>MERGE INTO</code>. A single <code>MERGE</code> cannot both
+update the old row and insert a new one for the same key, so the standard pattern
+feeds each change in twice: once with the real key (to close the current row) and
+once with a NULL key (so it falls through to <code>WHEN NOT MATCHED</code> and is inserted). It
+also needs the batch reduced to one row per customer first, which is where the
+"several changes in one batch" case has to be solved anyway.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Customer</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A plain change of city</td>
+<td>919</td>
+<td>The basic close-and-insert.</td>
+</tr>
+<tr>
+<td>Saved again with the same city</td>
+<td>920</td>
+<td>Creating a version for a non-change.</td>
+</tr>
+<tr>
+<td>Two changes in one batch</td>
+<td>921</td>
+<td>Handling only the latest change.</td>
+</tr>
+<tr>
+<td>Moved away and back</td>
+<td>922</td>
+<td>Collapsing by city instead of by consecutive entries.</td>
+</tr>
+<tr>
+<td>Change dated before the current version</td>
+<td>923</td>
+<td>Applying late changes.</td>
+</tr>
+<tr>
+<td>Change dated on the current version's start</td>
+<td>924</td>
+<td><code>&gt;=</code> instead of <code>&gt;</code>.</td>
+</tr>
+<tr>
+<td>One late change and one valid change</td>
+<td>925</td>
+<td>Rejecting the customer instead of the change.</td>
+</tr>
+<tr>
+<td>An unchanged save, then a real change</td>
+<td>926</td>
+<td>The no-op must not hide the change after it.</td>
+</tr>
+<tr>
+<td>The same new city reported twice</td>
+<td>927</td>
+<td>Two versions with the same city in a row.</td>
+</tr>
+<tr>
+<td>Not in the batch</td>
+<td>928 to 930</td>
+<td>Losing or altering untouched customers.</td>
+</tr>
+<tr>
+<td>New customers, one or two changes</td>
+<td>931 to 933</td>
+<td>Inner join to current rows; collapsing for new customers too.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

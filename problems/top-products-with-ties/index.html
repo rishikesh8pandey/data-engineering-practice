@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Top three products per category, ties included | SQL problem | NullTrap</title>
+  <meta name="description" content="Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/top-products-with-ties/">
+  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Top three products per category, ties included | SQL problem | NullTrap">
+  <meta property="og:description" content="Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/top-products-with-ties/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+  <script defer src="../../static/progress.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#about">About</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>11. Top three products per category, ties included</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">Tie trap</span><span class="badge">top n per group</span><span class="badge">rank</span><span class="badge">dense_rank</span><span class="badge">row_number</span><span class="badge">window functions</span></p>
+
+  <p class="problem-actions">
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/011-top-products-with-ties.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <button class="button secondary" id="mark-solved" type="button" data-slug="top-products-with-ties" hidden>Mark as solved</button>
+  </p>
+  <p class="note">
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine. Free Colab runs
+    only two or three notebooks at a time, so end the session of a finished problem
+    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
+    "Mark as solved" is remembered in this browser only.
+  </p>
+
+<h2>The situation</h2>
+<p>The merchandising team wants a "top three sellers" list for each product category.
+Two products with the same number of units sold are equally good, so neither may be
+dropped just because the list is "full".</p>
+<h2>Input tables</h2>
+<h3><code>product_sales</code></h3>
+<p>One row per product.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>product_id</code></td>
+<td>BIGINT</td>
+<td>Unique per product.</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>STRING</td>
+<td>The product's category.</td>
+</tr>
+<tr>
+<td><code>product_name</code></td>
+<td>STRING</td>
+<td>Display name.</td>
+</tr>
+<tr>
+<td><code>units_sold</code></td>
+<td>BIGINT</td>
+<td>Units sold this quarter. NULL means no sales were recorded for the product.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return the top three products of every category by <code>units_sold</code>.</p>
+<ul>
+<li>The best-selling product of a category has <code>sales_rank</code> 1.</li>
+<li>Products with the same <code>units_sold</code> share the same rank. The next lower value gets
+  the rank it would have had without the tie: after two products tied at rank 2, the
+  next product is rank 4, not 3.</li>
+<li>Keep every product whose <code>sales_rank</code> is 3 or less. That can be more than three
+  products when there is a tie, and fewer when the category is small.</li>
+<li>Products with a NULL <code>units_sold</code> are not ranked and do not appear.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per product that makes the list.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>category</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>product_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>product_name</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>units_sold</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>sales_rank</code></td>
+<td>INT</td>
+<td>1, 2 or 3.</td>
+</tr>
+</tbody>
+</table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "top-products-with-ties", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "product_sales", "url": "../../data/011-top-products-with-ties/product_sales.parquet"}], "starter": "-- Tables: product_sales\nSELECT *\nFROM product_sales\nLIMIT 10", "expected": {"columns": ["category", "product_id", "product_name", "sales_rank", "units_sold"], "row_count": 33, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"category\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_name\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"sales_rank\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"units_sold\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "5e401ef73950a65420871f005e19e00d56dd64a129642aa012e43d9e1350f155", "column_checks": [{"name": "category", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"category\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "1923651b7a132fd2768eb6ca3e9b1886b80dc85ce50f581550c62313794aacd5"}, {"name": "product_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "3f3b916ee3139fa892c5d65f6a12d2243e44ee6017ea7f014dc6c21ba07e07a5"}, {"name": "product_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "4f23b85edb75f47b1f97125036a3bcbd4b488fc4febb96b5bea4609428208d03"}, {"name": "sales_rank", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"sales_rank\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "b1722464503966c7b0fafc30870b9186be644aae0b590158ab76b25e636a5ee4"}, {"name": "units_sold", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"units_sold\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2d7e5392d39b95f525ee07d2e35f0f91f87f9f4b2f14c1fb007c17cb9fcfa554"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>"Top N per group" is a window function problem: number the rows inside each group,
+then keep the low numbers. SQL has three numbering functions, and the whole problem
+is choosing the right one. On the values 520, 480, 480, 455 they give:</p>
+<table>
+<thead>
+<tr>
+<th>units_sold</th>
+<th><code>ROW_NUMBER()</code></th>
+<th><code>RANK()</code></th>
+<th><code>DENSE_RANK()</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>520</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>480</td>
+<td>2</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>480</td>
+<td>3</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>455</td>
+<td>4</td>
+<td>4</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>ROW_NUMBER()</code> never repeats a number. Tied rows get different numbers, in an
+  order you did not choose.</li>
+<li><code>RANK()</code> gives tied rows the same number and then skips: after two rows at 2, the
+  next is 4. This is how a sports table works.</li>
+<li><code>DENSE_RANK()</code> gives tied rows the same number and does not skip: the next is 3.</li>
+</ul>
+<p>The requirement says the product after a two-way tie at rank 2 is rank 4. That is
+<code>RANK()</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">category</span><span class="p">,</span><span class="w"> </span><span class="n">product_id</span><span class="p">,</span><span class="w"> </span><span class="n">product_name</span><span class="p">,</span><span class="w"> </span><span class="n">units_sold</span><span class="p">,</span><span class="w"> </span><span class="n">sales_rank</span>
+<span class="k">FROM</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">SELECT</span>
+<span class="w">        </span><span class="n">category</span><span class="p">,</span><span class="w"> </span><span class="n">product_id</span><span class="p">,</span><span class="w"> </span><span class="n">product_name</span><span class="p">,</span><span class="w"> </span><span class="n">units_sold</span><span class="p">,</span>
+<span class="w">        </span><span class="n">RANK</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">category</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">units_sold</span><span class="w"> </span><span class="k">DESC</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">sales_rank</span>
+<span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">product_sales</span>
+<span class="w">    </span><span class="k">WHERE</span><span class="w"> </span><span class="n">units_sold</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+<span class="p">)</span><span class="w"> </span><span class="n">ranked</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">sales_rank</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">3</span>
+</code></pre></div>
+
+<p>Two details:</p>
+<ul>
+<li>The rank cannot be filtered in the same <code>SELECT</code> that computes it. Window functions
+  run after <code>WHERE</code>, so the filter goes in an outer query.</li>
+<li>Products with a NULL <code>units_sold</code> are removed before ranking. If they are left in,
+  they still get a rank, and in small categories that rank is 3 or less.</li>
+</ul>
+<p>The table has 56 products in 11 categories. The correct result has 33 rows.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>ROW_NUMBER()</code>.</strong> Returns 29 rows: exactly three per category, two for the category
+with two products. In "Phones" two products tie for third place with 610 units, and
+<code>ROW_NUMBER()</code> keeps one of them. Which one is not defined, so the result can change
+between runs. Any time a ranking can have ties, <code>ROW_NUMBER()</code> needs a reason.</p>
+<p><strong><code>DENSE_RANK()</code>.</strong> Returns 36 rows. It does not skip after a tie, so a fourth and
+fifth product slip in: "Laptops" (520, 480, 480, 455) gets four rows because 455 is
+dense rank 3, "Tablets" gets four and "Monitors" gets five. <code>DENSE_RANK()</code> answers a
+different question: the products with the three highest sales figures.</p>
+<p><strong>Forgetting the NULL filter.</strong> Returns 35 rows. "Printers" has two products and both
+have NULL sales; they tie at rank 1 and both appear. In a larger category the NULLs
+would simply rank last and go unnoticed, which is why this one is easy to miss in
+testing.</p>
+<p><strong><code>ORDER BY units_sold DESC LIMIT 3</code>.</strong> Three rows in total, not three per category.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Category</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Two-way tie for 2nd, then a 4th value</td>
+<td>Laptops</td>
+<td><code>DENSE_RANK()</code> lets the 4th product in.</td>
+</tr>
+<tr>
+<td>Tie exactly at the cut-off</td>
+<td>Phones</td>
+<td><code>ROW_NUMBER()</code> drops one of two equal products.</td>
+</tr>
+<tr>
+<td>Tie for 1st</td>
+<td>Tablets</td>
+<td><code>DENSE_RANK()</code> again: ranks 1, 1, 2, 3 instead of 1, 1, 3, 4.</td>
+</tr>
+<tr>
+<td>Three-way tie for 2nd</td>
+<td>Monitors</td>
+<td>Four rows with <code>RANK()</code>, three with <code>ROW_NUMBER()</code>, five with <code>DENSE_RANK()</code>.</td>
+</tr>
+<tr>
+<td>Every product tied</td>
+<td>Cameras</td>
+<td>All five are rank 1.</td>
+</tr>
+<tr>
+<td>Fewer than three products</td>
+<td>Audio</td>
+<td>Assuming every category returns three rows.</td>
+</tr>
+<tr>
+<td>Products with NULL sales</td>
+<td>Wearables, Printers</td>
+<td>Ranking NULLs instead of removing them.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>
