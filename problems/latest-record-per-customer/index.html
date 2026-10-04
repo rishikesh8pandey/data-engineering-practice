@@ -6,23 +6,23 @@
   <title>Keep the latest record per customer | SQL problem | NullTrap</title>
   <meta name="description" content="A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/latest-record-per-customer/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Keep the latest record per customer | SQL problem | NullTrap">
   <meta property="og:description" content="A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/latest-record-per-customer/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -156,7 +156,7 @@ arrive with the same <code>updated_at</code> as the row they correct, and some r
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "latest-record-per-customer", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customer_updates", "url": "../../data/002-latest-record-per-customer/customer_updates.parquet"}], "starter": "-- Tables: customer_updates\nSELECT *\nFROM customer_updates\nLIMIT 10", "expected": {"columns": ["city", "customer_id", "email", "updated_at"], "row_count": 40, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"city\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"email\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"updated_at\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "49832ba8cd31208da476dc2c3aba864e053fbbafc86416245106bc6768184920", "column_checks": [{"name": "city", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"city\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "06ee30719ce52a2d07cc891b7fafaa0317dc8da8279a7bac993c4dc963423409"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "8ba420426bd2a9b9094a1f0fe92bbc6573e2b4b35a07f696c73701bedd06bec3"}, {"name": "email", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"email\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "e9907e97726bdd42255fd6a40bb6d3e53244e2a2655dccc903bba34edd8e6084"}, {"name": "updated_at", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"updated_at\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "876160f7db0c6f95f45db84941ea31227ec044d54f6418431bdb2f20fe2e8f92"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

@@ -6,23 +6,23 @@
   <title>Merge overlapping coverage periods | SQL problem | NullTrap</title>
   <meta name="description" content="Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/merge-overlapping-periods/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Merge overlapping coverage periods | SQL problem | NullTrap">
   <meta property="og:description" content="Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/merge-overlapping-periods/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -140,7 +140,7 @@ without interruption?</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "merge-overlapping-periods", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "coverage_periods", "url": "../../data/009-merge-overlapping-periods/coverage_periods.parquet"}], "starter": "-- Tables: coverage_periods\nSELECT *\nFROM coverage_periods\nLIMIT 10", "expected": {"columns": ["end_date", "start_date", "user_id"], "row_count": 52, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"end_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"start_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"user_id\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "8fd7c8b2d87b60b73ba48f23c7c3bd049fc89c29ad3c97a0e1f30c7bdefb3664", "column_checks": [{"name": "end_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"end_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "4425ad7007239fde26ce10e69adaed8e0c4fb8d30d0f97cee1fa660a11b1d45b"}, {"name": "start_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"start_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "8a776a056e0a4954c89fbc0736cdf7151dd560167647adfcebfbde2598a83de2"}, {"name": "user_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"user_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "484a2fff71f61a12b999c8ea7a148b97c12e80916fd210635ed645377aee358c"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

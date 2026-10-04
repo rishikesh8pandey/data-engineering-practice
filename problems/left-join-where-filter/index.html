@@ -6,23 +6,23 @@
   <title>The LEFT JOIN that a WHERE clause quietly undoes | SQL problem | NullTrap</title>
   <meta name="description" content="Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/left-join-where-filter/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="The LEFT JOIN that a WHERE clause quietly undoes | SQL problem | NullTrap">
   <meta property="og:description" content="Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/left-join-where-filter/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -181,7 +181,7 @@ ones to call.</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "left-join-where-filter", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customers", "url": "../../data/013-left-join-where-filter/customers.parquet"}, {"name": "orders", "url": "../../data/013-left-join-where-filter/orders.parquet"}], "starter": "-- Tables: customers, orders\nSELECT *\nFROM customers\nLIMIT 10", "expected": {"columns": ["completed_amount", "completed_orders", "customer_id", "name"], "row_count": 40, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"completed_amount\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"completed_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"name\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "26c80951ae9bc2de272a41e19f1682298949f131046850a760d86669447b0f7b", "column_checks": [{"name": "completed_amount", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"completed_amount\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "7e4a3440414075a004d3ad7ae7ad5ab33cc0c302c344504d1db75cee047510ba"}, {"name": "completed_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"completed_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "425f103c9644ead4722c30dd100ecd2fbbbcee521e8b4ac89ae27548d1c1fdfd"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "01dec9ef2a42903518a850dffad165f2920a3881c2faa2cc969e474fff737a2a"}, {"name": "name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "78c8316d76dd608172266eb32ede8239257bf2470191163a329fa4aa8035e80d"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

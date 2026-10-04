@@ -6,23 +6,23 @@
   <title>Month-over-month change when a month is missing | SQL problem | NullTrap</title>
   <meta name="description" content="Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/month-over-month-gaps/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Month-over-month change when a month is missing | SQL problem | NullTrap">
   <meta property="og:description" content="Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/month-over-month-gaps/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -150,7 +150,7 @@ have no row.</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "month-over-month-gaps", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "monthly_revenue", "url": "../../data/016-month-over-month-gaps/monthly_revenue.parquet"}], "starter": "-- Tables: monthly_revenue\nSELECT *\nFROM monthly_revenue\nLIMIT 10", "expected": {"columns": ["plan_name", "prev_month_revenue", "revenue", "revenue_change", "revenue_month"], "row_count": 64, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"plan_name\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"prev_month_revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue_change\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"revenue_month\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "b48052f5efba1211e6e6dd9b710119682028dd4de64508cd4221c96372b702ab", "column_checks": [{"name": "plan_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"plan_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "017d3a18f8c1bb11b63b67c84a8a8ec3f77e5851a629429d1994e7f2bcc8c9c5"}, {"name": "prev_month_revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"prev_month_revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2f2315effefa83db42186d5a15364e204808b2becddc9940a948e571d8c82325"}, {"name": "revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "d2e2464368c4f2f1c4fff96802487a1c53f0ce7f636da150b684f25c5b65aeb4"}, {"name": "revenue_change", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue_change\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "d3691301fcf4ad4c3cdec2eda6c7eb5b71f42d7d9d41a73ad3a6d3106bbf0a16"}, {"name": "revenue_month", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue_month\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "8c914335198b9a8d43b04d21a9668f752534a9b1d2ebd625d9f33b223cba0f02"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

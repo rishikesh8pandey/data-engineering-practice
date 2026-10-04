@@ -6,23 +6,23 @@
   <title>Which tier was the customer in when they ordered? | SQL problem | NullTrap</title>
   <meta name="description" content="Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-point-in-time-lookup/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Which tier was the customer in when they ordered? | SQL problem | NullTrap">
   <meta property="og:description" content="Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-point-in-time-lookup/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -189,7 +189,7 @@ previous one ends, but a customer can also have been out of the programme for a 
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "scd2-point-in-time-lookup", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customer_dim", "url": "../../data/019-scd2-point-in-time-lookup/customer_dim.parquet"}, {"name": "orders", "url": "../../data/019-scd2-point-in-time-lookup/orders.parquet"}], "starter": "-- Tables: customer_dim, orders\nSELECT *\nFROM customer_dim\nLIMIT 10", "expected": {"columns": ["amount", "customer_id", "order_date", "order_id", "tier"], "row_count": 199, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"amount\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"order_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"order_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"tier\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "d7687a70f29ef4d223642878ddf80bbe1c3e47ede7dc99f5c432967a526222c2", "column_checks": [{"name": "amount", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"amount\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "783645d7ca4be1c51e6a1316c73b3c6704ad59d881798c6969c23d0e66b0ed01"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6a9d6604b9e44ef1cb21a75614b3043d80aca0054b579d15fcc4ec5d862242e9"}, {"name": "order_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"order_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "9c4b63ecc93ded434b33aad83910b497edd4ba1261fc801fbc6122281efbedfd"}, {"name": "order_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"order_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "5d60ed3fdddabe389b65ffbe45a0a7969a3379237507b1b8bdb03c0301343abb"}, {"name": "tier", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"tier\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "51b855bb2822019853a9f5f2fea51a57519004a60177d9ae14f2b8032a73cd7e"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

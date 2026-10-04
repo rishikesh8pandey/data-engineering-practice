@@ -6,23 +6,23 @@
   <title>The average rating where NULL is not zero | SQL problem | NullTrap</title>
   <meta name="description" content="Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-rating-nulls/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="The average rating where NULL is not zero | SQL problem | NullTrap">
   <meta property="og:description" content="Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-rating-nulls/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -144,7 +144,7 @@ Somebody had "cleaned" the missing ratings first.</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "average-rating-nulls", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "reviews", "url": "../../data/012-average-rating-nulls/reviews.parquet"}], "starter": "-- Tables: reviews\nSELECT *\nFROM reviews\nLIMIT 10", "expected": {"columns": ["avg_rating", "product_id", "rated_reviews", "total_reviews"], "row_count": 30, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(round(\"avg_rating\", 6) AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"rated_reviews\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"total_reviews\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "1a4d2bd2ce33633925c106ada484080d845c81c215552828555165d731f83436", "column_checks": [{"name": "avg_rating", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"avg_rating\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2172c55cd958cfd9e2e6b044cf6e994db6ba875d27629a8591b6cfd1849fa16c"}, {"name": "product_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f0edaab10bac3f350458ed9c433379bbb5928169dbb4e941aa85e7d5392fb74c"}, {"name": "rated_reviews", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"rated_reviews\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6cee3d3b275053890c13c0c5f61d6e2b15a8a34896b6124bd15c644acf59f642"}, {"name": "total_reviews", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"total_reviews\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6e708aae6b5a9170ffe067d69f556ffc78cdf6a1c59494ef2ec6a06073d666e4"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

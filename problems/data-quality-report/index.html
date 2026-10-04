@@ -6,23 +6,23 @@
   <title>A data quality report that counts NULLs correctly | SQL problem | NullTrap</title>
   <meta name="description" content="Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/data-quality-report/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="A data quality report that counts NULLs correctly | SQL problem | NullTrap">
   <meta property="og:description" content="Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/data-quality-report/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -197,7 +197,7 @@ that fail it. A rule that no row fails has <code>failed_rows</code> = 0.</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "data-quality-report", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "shipments", "url": "../../data/006-data-quality-report/shipments.parquet"}, {"name": "warehouses", "url": "../../data/006-data-quality-report/warehouses.parquet"}], "starter": "-- Tables: shipments, warehouses\nSELECT *\nFROM shipments\nLIMIT 10", "expected": {"columns": ["failed_rows", "rule_name"], "row_count": 6, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"failed_rows\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"rule_name\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "88fae216a88a4e599e0ee71617b2e7f172055a0652fd3d2521b7f3cf7442f595", "column_checks": [{"name": "failed_rows", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"failed_rows\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f27d4f5129eef9c45940463d2f316785e460d2615a43b1635936706189e235b6"}, {"name": "rule_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"rule_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f666efba62234d23483266c9ef0a2ffa66e83af030ff7b39fdacb5db9eab28c5"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

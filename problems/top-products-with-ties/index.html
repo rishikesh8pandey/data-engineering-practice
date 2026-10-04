@@ -6,23 +6,23 @@
   <title>Top three products per category, ties included | SQL problem | NullTrap</title>
   <meta name="description" content="Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/top-products-with-ties/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Top three products per category, ties included | SQL problem | NullTrap">
   <meta property="og:description" content="Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/top-products-with-ties/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -153,7 +153,7 @@ dropped just because the list is "full".</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "top-products-with-ties", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "product_sales", "url": "../../data/011-top-products-with-ties/product_sales.parquet"}], "starter": "-- Tables: product_sales\nSELECT *\nFROM product_sales\nLIMIT 10", "expected": {"columns": ["category", "product_id", "product_name", "sales_rank", "units_sold"], "row_count": 33, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"category\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"product_name\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"sales_rank\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"units_sold\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "5e401ef73950a65420871f005e19e00d56dd64a129642aa012e43d9e1350f155", "column_checks": [{"name": "category", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"category\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "1923651b7a132fd2768eb6ca3e9b1886b80dc85ce50f581550c62313794aacd5"}, {"name": "product_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "3f3b916ee3139fa892c5d65f6a12d2243e44ee6017ea7f014dc6c21ba07e07a5"}, {"name": "product_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"product_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "4f23b85edb75f47b1f97125036a3bcbd4b488fc4febb96b5bea4609428208d03"}, {"name": "sales_rank", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"sales_rank\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "b1722464503966c7b0fafc30870b9186be644aae0b590158ab76b25e636a5ee4"}, {"name": "units_sold", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"units_sold\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "2d7e5392d39b95f525ee07d2e35f0f91f87f9f4b2f14c1fb007c17cb9fcfa554"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>

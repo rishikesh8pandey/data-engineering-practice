@@ -6,23 +6,23 @@
   <title>Build SCD2 history from repeated saves | SQL problem | NullTrap</title>
   <meta name="description" content="Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-history-from-saves/">
-  <link rel="icon" href="../../static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="../../static/favicon.png">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Build SCD2 history from repeated saves | SQL problem | NullTrap">
   <meta property="og:description" content="Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-history-from-saves/">
   <meta property="og:site_name" content="NullTrap">
-  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css">
-  <link rel="stylesheet" href="../../static/code.css">
-  <script defer src="../../static/progress.js"></script>
+  <link rel="stylesheet" href="../../static/style.css?v=a621f0d12b">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=1624223a38"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg" alt="" width="24" height="24">NullTrap</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
       <nav>
         <a href="../../problems/">Problems</a>
         <a href="../../#about">About</a>
@@ -153,7 +153,7 @@ the city stayed the same.</p>
   <div id="editor-result" class="editor-result"></div>
   <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
   <script type="application/json" id="editor-config">{"slug": "scd2-history-from-saves", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "customer_saves", "url": "../../data/004-scd2-history-from-saves/customer_saves.parquet"}], "starter": "-- Tables: customer_saves\nSELECT *\nFROM customer_saves\nLIMIT 10", "expected": {"columns": ["city", "customer_id", "is_current", "valid_from", "valid_to"], "row_count": 85, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"city\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"is_current\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"valid_from\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"valid_to\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "bbf929ba980885b7830917a038471ad43145dede996c324abf95936f9eb45346", "column_checks": [{"name": "city", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"city\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f2a040a31e72e0d2580fe079634e3e603795ee43568c737fdb09906373074c67"}, {"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "7b4a9505d2fefc4166482c83fe572b2b9c884336d4ef840efdfcdbeab2e33533"}, {"name": "is_current", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"is_current\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6ad75b8617b49bf0f68498b7ee5a4c910ffd4703efb999855a09c22221fc915d"}, {"name": "valid_from", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"valid_from\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "a468827987fd21869e69bd1e0ad3c28f87b7219df150cb57c89cfd4fc7886e1a"}, {"name": "valid_to", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"valid_to\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "4f67382c5b1536d6c1745dfaa567145fb58400b1e6d0768f812968c3cf3e66f2"}]}}</script>
-  <script type="module" src="../../static/editor.js"></script>
+  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
 </section>
 
   <h2>Explanation</h2>
