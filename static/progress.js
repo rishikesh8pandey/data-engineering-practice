@@ -54,4 +54,13 @@
     button.hidden = false;
     render();
   }
+
+  // Called by the in-browser editor when a check passes.
+  window.nullTrapMarkSolved = function (slug) {
+    if (solved.indexOf(slug) === -1) {
+      solved.push(slug);
+      write(solved);
+    }
+    if (button && button.dataset.slug === slug) render();
+  };
 })();

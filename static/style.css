@@ -231,7 +231,36 @@ details.explanation pre code { background: none; }
 .button.secondary:hover { background: var(--surface); }
 .button.secondary.is-solved { color: var(--easy); border-color: var(--easy); }
 
-#about { scroll-margin-top: 70px; }
+#about, #editor { scroll-margin-top: 70px; }
+
+/* In-browser SQL editor */
+.editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  background: var(--ink);
+  color: var(--ink-text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font: 0.9rem/1.55 ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+  tab-size: 4;
+}
+.editor textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+.editor-actions .button:disabled { opacity: 0.55; cursor: progress; }
+.editor-message { border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+.editor-message ul { margin: 6px 0 0; padding-left: 20px; }
+.editor-message li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.editor-message.right { border-left-color: var(--easy); }
+.editor-message.right strong { color: var(--easy); }
+.editor-message.wrong { border-left-color: var(--medium); }
+.editor-message.error { border-left-color: var(--hard); }
+.editor-message.error li { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 0.85rem; list-style: none; margin-left: -20px; }
+.editor-result table { max-height: 420px; overflow: auto; font-size: 0.88rem; }
+.editor-result td, .editor-result th { white-space: nowrap; }
+.editor-result td.null { color: var(--muted); font-style: italic; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }

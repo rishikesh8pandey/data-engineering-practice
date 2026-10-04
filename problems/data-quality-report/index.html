@@ -36,11 +36,12 @@
   <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge trap">Duplicate trap</span><span class="badge">data quality</span><span class="badge">nulls</span><span class="badge">not in</span><span class="badge">duplicates</span></p>
 
   <p class="problem-actions">
-    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/006-data-quality-report.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+    <a class="button" href="#editor">Solve in the browser</a>
+    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/006-data-quality-report.ipynb" target="_blank" rel="noopener">Open in Colab</a>
     <button class="button secondary" id="mark-solved" type="button" data-slug="data-quality-report" hidden>Mark as solved</button>
   </p>
   <p class="note">
-    The notebook has the data, an answer cell and a <code>check()</code> function.
+    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
     You need a Google account; nothing is installed on your machine. Free Colab runs
     only two or three notebooks at a time, so end the session of a finished problem
     (Runtime &gt; Disconnect and delete runtime) before opening the next one.
@@ -178,6 +179,26 @@ that fail it. A rule that no row fails has <code>failed_rows</code> = 0.</p>
 </tr>
 </tbody>
 </table>
+
+<section id="editor" class="editor">
+  <h2>Solve it in the browser</h2>
+  <p class="note">
+    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+    The Colab notebook runs real Spark.
+  </p>
+  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+  <p class="editor-actions">
+    <button class="button secondary" id="editor-run" type="button">Run</button>
+    <button class="button" id="editor-check" type="button">Run and check</button>
+    <span id="editor-status" class="note" aria-live="polite"></span>
+  </p>
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result"></div>
+  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <script type="application/json" id="editor-config">{"slug": "data-quality-report", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "shipments", "url": "../../data/006-data-quality-report/shipments.parquet"}, {"name": "warehouses", "url": "../../data/006-data-quality-report/warehouses.parquet"}], "starter": "-- Tables: shipments, warehouses\nSELECT *\nFROM shipments\nLIMIT 10", "expected": {"columns": ["failed_rows", "rule_name"], "row_count": 6, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"failed_rows\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"rule_name\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "88fae216a88a4e599e0ee71617b2e7f172055a0652fd3d2521b7f3cf7442f595", "column_checks": [{"name": "failed_rows", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"failed_rows\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f27d4f5129eef9c45940463d2f316785e460d2615a43b1635936706189e235b6"}, {"name": "rule_name", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"rule_name\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f666efba62234d23483266c9ef0a2ffa66e83af030ff7b39fdacb5db9eab28c5"}]}}</script>
+  <script type="module" src="../../static/editor.js"></script>
+</section>
 
   <h2>Explanation</h2>
 <details class="explanation"><summary>Show explanation</summary>
