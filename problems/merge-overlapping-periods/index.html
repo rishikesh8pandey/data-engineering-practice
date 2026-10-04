@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Merge overlapping coverage periods | SQL problem | Pipeline Practice</title>
+  <meta name="description" content="Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/merge-overlapping-periods/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Merge overlapping coverage periods | SQL problem | Pipeline Practice">
+  <meta property="og:description" content="Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/merge-overlapping-periods/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Merge overlapping coverage periods</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/009-merge-overlapping-periods.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>Each row of <code>coverage_periods</code> says a user had an active plan from one date to
+another. Renewals, upgrades and re-sent records mean the periods of one user overlap,
+sit inside each other, or follow each other without a break.</p>
+<p>Billing needs the continuous stretches: from when to when was the user covered
+without interruption?</p>
+<h2>Input tables</h2>
+<h3><code>coverage_periods</code></h3>
+<p>One row per recorded period. A user has one or more rows.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td>The user.</td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td>DATE</td>
+<td>First covered day.</td>
+</tr>
+<tr>
+<td><code>end_date</code></td>
+<td>DATE</td>
+<td>Last covered day (inclusive). Never before <code>start_date</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Merge each user's periods into continuous blocks and return one row per block.</p>
+<ul>
+<li>Two periods belong to the same block if they overlap, or if one starts the day
+  after the other ends. Covered up to 31 January and again from 1 February is
+  continuous cover.</li>
+<li>One or more uncovered days between two periods separate them into different blocks.</li>
+<li>A period that lies completely inside another one changes nothing.</li>
+<li>A block's <code>start_date</code> is its first covered day and its <code>end_date</code> is its last
+  covered day.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per continuous block.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td>DATE</td>
+<td>First day of the block.</td>
+</tr>
+<tr>
+<td><code>end_date</code></td>
+<td>DATE</td>
+<td>Last day of the block.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>Sort each user's periods by <code>start_date</code> and walk through them. A period either
+continues the block that is already open or starts a new one. It starts a new one only
+if it begins after everything seen so far has ended.</p>
+<p>"Everything seen so far" is the important phrase. The question is not "did the
+previous period end before this one starts?" but "has <strong>any</strong> earlier period reached
+this far?" That is a running maximum of <code>end_date</code> over all earlier rows:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">MAX</span><span class="p">(</span><span class="n">end_date</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">user_id</span>
+<span class="w">    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">start_date</span><span class="p">,</span><span class="w"> </span><span class="n">end_date</span>
+<span class="w">    </span><span class="k">ROWS</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="n">UNBOUNDED</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="n">PRECEDING</span>
+<span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">covered_until</span>
+</code></pre></div>
+
+<p>The frame stops at <code>1 PRECEDING</code>, so the current row is not included. For a user's
+first period the frame is empty and <code>covered_until</code> is NULL.</p>
+<p>A period starts a new block when:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">covered_until</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="n">start_date</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">DATE_ADD</span><span class="p">(</span><span class="n">covered_until</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The <code>+ 1</code> implements the rule that cover up to 31 January followed by cover from
+1 February is continuous. Dates are inclusive on both ends, so "the next day" is
+adjacent, not a gap.</p>
+<p>After that it is the usual gaps-and-islands finish: a running sum of the "starts a new
+block" flag numbers the blocks, and a <code>GROUP BY user_id, block</code> with <code>MIN(start_date)</code>
+and <code>MAX(end_date)</code> produces one row per block.</p>
+<p>The 81 periods of 30 users merge into 52 blocks.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>LAG(end_date)</code> instead of the running maximum.</strong> Returns 54 rows. It works until a
+short period sits inside a long one. User 503:</p>
+<table>
+<thead>
+<tr>
+<th>start_date</th>
+<th>end_date</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 Jan</td>
+<td>31 Mar</td>
+<td>long period</td>
+</tr>
+<tr>
+<td>10 Jan</td>
+<td>20 Jan</td>
+<td>inside the first</td>
+</tr>
+<tr>
+<td>15 Mar</td>
+<td>30 Apr</td>
+<td>overlaps the first, not the second</td>
+</tr>
+</tbody>
+</table>
+<p>For the third row, <code>LAG(end_date)</code> is 20 January, so it looks like a new block starts
+on 15 March. In fact the first period is still running. This is the mistake that
+separates people who have memorised gaps-and-islands from people who understand it.</p>
+<p><strong><code>start_date &gt; covered_until</code> without the extra day.</strong> Returns 56 rows. Periods that
+follow each other without a gap (user 507) are left as separate blocks.</p>
+<p><strong>Being too generous with the gap.</strong> Allowing <code>start_date &lt;= covered_until + 2</code>
+returns 49 rows. User 511 has no cover on 1 February; that one day is a real
+interruption.</p>
+<p><strong><code>MIN(start_date)</code> and <code>MAX(end_date)</code> per user.</strong> Returns 30 rows. It reports every
+user as covered from their first day to their last, gaps included.</p>
+<p><strong><code>SELECT DISTINCT</code>.</strong> Removes the one repeated period and merges nothing: 80 rows.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Users</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Period inside a longer one, followed by an overlap with the long one</td>
+<td>503, 527</td>
+<td><code>LAG(end_date)</code>.</td>
+</tr>
+<tr>
+<td>Next period starts the day after the previous ends</td>
+<td>507</td>
+<td>Missing the <code>+ 1</code>.</td>
+</tr>
+<tr>
+<td>Exactly one uncovered day</td>
+<td>511</td>
+<td>Merging across a real gap.</td>
+</tr>
+<tr>
+<td>The same period twice</td>
+<td>515</td>
+<td>Duplicates creating an extra block.</td>
+</tr>
+<tr>
+<td>Same start date, different end dates</td>
+<td>519</td>
+<td>Ordering by <code>start_date</code> alone and assuming the first row is the longest.</td>
+</tr>
+<tr>
+<td>Chain: A overlaps B, B overlaps C, A does not reach C</td>
+<td>523</td>
+<td>Pairwise self-joins that merge only direct neighbours.</td>
+</tr>
+<tr>
+<td>Single period</td>
+<td>530</td>
+<td>Empty frame: <code>covered_until</code> is NULL.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

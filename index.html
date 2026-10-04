@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline Practice: real-world SQL and PySpark practice problems</title>
+  <meta name="description" content="Data engineering practice problems in SQL and PySpark, built from real pipeline situations: duplicates, late data, SCD2, incremental loads. Runs free in Google Colab.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pipeline Practice: real-world SQL and PySpark practice problems">
+  <meta property="og:description" content="Data engineering practice problems in SQL and PySpark, built from real pipeline situations: duplicates, late data, SCD2, incremental loads. Runs free in Google Colab.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="./static/style.css">
+  <link rel="stylesheet" href="./static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="./">Pipeline Practice</a>
+      <nav>
+        <a href="./problems/">Problems</a>
+        <a href="./#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<section class="hero">
+  <div class="hero-text">
+    <p class="eyebrow">SQL &middot; PySpark &middot; Debug the AI</p>
+    <h1>Practice the data engineering problems that <span class="highlight">real pipelines</span> throw at you</h1>
+    <p class="lead">
+      Problems built from situations you meet on the job: duplicate rows, late-arriving
+      data, slowly changing dimensions, incremental loads, joins that multiply rows.
+      Every problem runs in a free Google Colab notebook. Nothing to install.
+    </p>
+    <p class="hero-actions">
+      <a class="button" href="problems/">See the problems (10)</a>
+      <a class="button secondary" href="#signup">Get updates</a>
+    </p>
+  </div>
+  <div class="terminal" aria-hidden="true">
+    <div class="terminal-bar"><span></span><span></span><span></span></div>
+<pre><span class="prompt">&gt;&gt;&gt;</span> check(result)
+<span class="bad">Not correct yet.</span>
+  - Columns and row count are right,
+    but values are wrong in: revenue.
+
+<span class="prompt">&gt;&gt;&gt;</span> check(result)
+<span class="good">Correct. Your result matches
+the expected output.</span></pre>
+  </div>
+</section>
+
+<section>
+  <h2>Three tracks</h2>
+  <div class="grid">
+    <div class="card track-sql">
+      <p class="card-tag">Track 1</p>
+      <h3>SQL</h3>
+      <p>Solve the problem with one Spark SQL query. The place to start.</p>
+    </div>
+    <div class="card track-pyspark">
+      <p class="card-tag">Track 2</p>
+      <h3>PySpark</h3>
+      <p>Solve it with the DataFrame API, the way it is written in production jobs.</p>
+    </div>
+    <div class="card track-debug-the-ai">
+      <p class="card-tag">Track 3</p>
+      <h3>Debug the AI</h3>
+      <p>You get AI-written code that runs without errors but returns the wrong result. Find the bug and fix it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li>Pick a problem and open its notebook in Colab. The notebook installs PySpark and loads the data.</li>
+    <li>Write your answer and run <code>check(result)</code>.</li>
+    <li>If it is wrong, the check tells you what kind of thing is off (columns, types, row count, which column) but never the answer.</li>
+    <li>When you are done, or stuck, read the explanation: the approach, the common wrong answers and why they are wrong.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Who it is for</h2>
+  <p>
+    Freshers and working engineers in India who are preparing for data engineering
+    interviews, or who want to get better at the work itself. The problems use small
+    synthetic datasets with the awkward cases planted on purpose: nulls, ties,
+    duplicates, late records.
+  </p>
+  <p>
+    The problems listed here are free. Harder problems with detailed explanations
+    will be paid later.
+  </p>
+</section>
+
+<section id="signup" class="signup">
+  <h2>Get an email when new problems are added</h2>
+<p>Email signup opens soon.</p>
+</section>
+
+<section>
+  <h2>Latest problems</h2>
+  <div class="problem-list">
+<div class="problem-card" data-track="pyspark" data-difficulty="hard"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p><h3><a href="./problems/asof-exchange-rate-join/">Convert each transaction with the rate valid at the time</a></h3><p>A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p></div>
+<div class="problem-card" data-track="sql" data-difficulty="hard"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p><h3><a href="./problems/merge-overlapping-periods/">Merge overlapping coverage periods</a></h3><p>Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p></div>
+<div class="problem-card" data-track="debug-the-ai" data-difficulty="easy"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p><h3><a href="./problems/union-swapped-columns/">The union that swaps two columns</a></h3><p>AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p></div>
+  </div>
+</section>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

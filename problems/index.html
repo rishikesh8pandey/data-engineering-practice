@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL and PySpark data engineering problems | Pipeline Practice</title>
+  <meta name="description" content="All practice problems. Filter by track (SQL, PySpark, Debug the AI) and by difficulty.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SQL and PySpark data engineering problems | Pipeline Practice">
+  <meta property="og:description" content="All practice problems. Filter by track (SQL, PySpark, Debug the AI) and by difficulty.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../static/style.css">
+  <link rel="stylesheet" href="../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../">Pipeline Practice</a>
+      <nav>
+        <a href="../problems/">Problems</a>
+        <a href="../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<h1>Problems</h1>
+
+<form class="filters" id="filters">
+  <label>Track
+    <select name="track">
+      <option value="">All tracks</option>
+      <option value="sql">SQL</option>
+      <option value="pyspark">PySpark</option>
+      <option value="debug-the-ai">Debug the AI</option>
+    </select>
+  </label>
+  <label>Difficulty
+    <select name="difficulty">
+      <option value="">All difficulties</option>
+      <option value="easy">Easy</option>
+      <option value="medium">Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </label>
+  <span class="filter-count" id="filter-count"></span>
+</form>
+
+<div class="problem-list" id="problem-list">
+<div class="problem-card" data-track="debug-the-ai" data-difficulty="easy"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">joins</span><span class="badge">row duplication</span><span class="badge">aggregation</span></p><h3><a href="../problems/orders-payments-join/">Revenue per customer is higher than the ledger</a></h3><p>An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.</p></div>
+<div class="problem-card" data-track="sql" data-difficulty="easy"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge">deduplication</span><span class="badge">window functions</span><span class="badge">nulls</span></p><h3><a href="../problems/latest-record-per-customer/">Keep the latest record per customer</a></h3><p>A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.</p></div>
+<div class="problem-card" data-track="pyspark" data-difficulty="medium"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge">incremental load</span><span class="badge">late-arriving data</span><span class="badge">watermark</span></p><h3><a href="../problems/incremental-load-late-events/">The incremental load that loses late events</a></h3><p>A nightly incremental load filters on event time and silently skips events that arrive late. Work out with PySpark which run should load each event, exactly once.</p></div>
+<div class="problem-card" data-track="sql" data-difficulty="medium"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">window functions</span><span class="badge">nulls</span></p><h3><a href="../problems/scd2-history-from-saves/">Build SCD2 history from repeated saves</a></h3><p>Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.</p></div>
+<div class="problem-card" data-track="debug-the-ai" data-difficulty="medium"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge">window functions</span><span class="badge">running total</span><span class="badge">window frame</span></p><h3><a href="../problems/running-balance-tied-dates/">The running balance that jumps ahead</a></h3><p>An AI-written Spark SQL window query computes a running account balance, but transactions on the same date all show the end-of-day balance. Find the window frame bug and fix it.</p></div>
+<div class="problem-card" data-track="sql" data-difficulty="easy"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge">data quality</span><span class="badge">nulls</span><span class="badge">not in</span><span class="badge">duplicates</span></p><h3><a href="../problems/data-quality-report/">A data quality report that counts NULLs correctly</a></h3><p>Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.</p></div>
+<div class="problem-card" data-track="pyspark" data-difficulty="medium"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge">sessionization</span><span class="badge">window functions</span><span class="badge">lag</span><span class="badge">gaps and islands</span></p><h3><a href="../problems/sessionize-page-views/">Sessionize page views with a 30-minute gap</a></h3><p>Group raw page views into user sessions with PySpark window functions. A session ends after more than 30 minutes of inactivity. Covers the exact boundary, long sessions and sessions across midnight.</p></div>
+<div class="problem-card" data-track="debug-the-ai" data-difficulty="easy"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p><h3><a href="../problems/union-swapped-columns/">The union that swaps two columns</a></h3><p>AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p></div>
+<div class="problem-card" data-track="sql" data-difficulty="hard"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p><h3><a href="../problems/merge-overlapping-periods/">Merge overlapping coverage periods</a></h3><p>Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p></div>
+<div class="problem-card" data-track="pyspark" data-difficulty="hard"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p><h3><a href="../problems/asof-exchange-rate-join/">Convert each transaction with the rate valid at the time</a></h3><p>A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p></div>
+</div>
+<p id="no-results" hidden>No problems match these filters yet.</p>
+
+<script src="../static/filters.js"></script>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build SCD2 history from repeated saves | SQL problem | Pipeline Practice</title>
+  <meta name="description" content="Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-history-from-saves/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Build SCD2 history from repeated saves | SQL problem | Pipeline Practice">
+  <meta property="og:description" content="Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-history-from-saves/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Build SCD2 history from repeated saves</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">window functions</span><span class="badge">nulls</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/004-scd2-history-from-saves.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>The CRM writes a row to <code>customer_saves</code> every time someone presses Save on a customer
+record, whether or not anything changed. Analysts need the history of where each
+customer lived as a type 2 slowly changing dimension: one row per period during which
+the city stayed the same.</p>
+<h2>Input tables</h2>
+<h3><code>customer_saves</code></h3>
+<p>One row per save. A customer has at most one save per date.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>The city on the record after the save. NULL means no city on record.</td>
+</tr>
+<tr>
+<td><code>saved_on</code></td>
+<td>DATE</td>
+<td>The date of the save.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return one row per version of a customer's city.</p>
+<ul>
+<li>A new version starts at the customer's first save, and at every save where the
+  city is different from the city of the previous save.</li>
+<li>A save that leaves the city unchanged does not start a new version.</li>
+<li>NULL is a value like any other here. Going from a city to NULL, or from NULL to a
+  city, is a change. Two consecutive saves with a NULL city are not.</li>
+<li>If a customer returns to a city they lived in before, that is a new version. The
+  two stays are separate rows.</li>
+<li><code>valid_from</code> is the <code>saved_on</code> of the save that started the version.</li>
+<li><code>valid_to</code> is the <code>valid_from</code> of the customer's next version. The latest version
+  has <code>valid_to</code> = NULL.</li>
+<li><code>is_current</code> is true for the latest version of each customer and false otherwise.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per customer version.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>Can be NULL.</td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>valid_to</code></td>
+<td>DATE</td>
+<td>NULL for the current version.</td>
+</tr>
+<tr>
+<td><code>is_current</code></td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>The saves are a stream of "the city is now X" statements. Most of an SCD2 build is
+deciding which of those statements start a new version.</p>
+<p>Step 1: find the saves that start a version. Compare each save's city with the city of
+the customer's previous save.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">WHERE</span><span class="w"> </span><span class="n">save_number</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="p">(</span><span class="n">city</span><span class="w"> </span><span class="o">&lt;=&gt;</span><span class="w"> </span><span class="n">prev_city</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>prev_city</code> comes from <code>LAG(city)</code>. Two details matter:</p>
+<ul>
+<li><code>&lt;=&gt;</code> is the null-safe equality operator. <code>NULL &lt;=&gt; NULL</code> is true and
+  <code>'Pune' &lt;=&gt; NULL</code> is false. With the ordinary <code>&lt;&gt;</code>, any comparison involving NULL is
+  NULL, and a <code>WHERE</code> clause treats NULL as "no".</li>
+<li>The first save needs its own condition (<code>ROW_NUMBER() = 1</code>). You cannot rely on
+  <code>prev_city</code> being NULL to detect it, because a first save with a NULL city would
+  compare as equal to its missing predecessor.</li>
+</ul>
+<p>Step 2: after dropping the saves that changed nothing, each remaining row is the start
+of one version. A version ends where the next one starts:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">LEAD</span><span class="p">(</span><span class="n">valid_from</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">customer_id</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">valid_from</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">valid_to</span>
+</code></pre></div>
+
+<p><code>LEAD</code> returns NULL for the last version, which is exactly the "still current" marker,
+so <code>is_current</code> is <code>valid_to IS NULL</code>.</p>
+<p>The order of the two steps matters. <code>LEAD</code> has to run after the no-op saves are gone,
+otherwise it finds the next save instead of the next version.</p>
+<p>The 123 saves of 40 customers produce 85 versions.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>city &lt;&gt; prev_city</code>.</strong> Returns 80 rows. Every change to or from NULL is missed,
+because the comparison is NULL rather than true. Customer 318 goes Mumbai, NULL, NULL,
+Pune and should have three versions; this gives one.</p>
+<p><strong><code>GROUP BY customer_id, city</code> with <code>MIN(saved_on)</code>.</strong> Returns 77 rows. It merges two
+separate stays in the same city into one. Customer 303 lived in Pune, moved to Mumbai
+and came back: three versions, not two. The second Pune stay also ends up with the
+wrong dates.</p>
+<p><strong><code>LEAD</code> directly on the saves, without removing no-ops.</strong> Returns 123 rows, one per
+save. A customer who pressed Save three times in Bengaluru gets three "versions".</p>
+<p><strong><code>WHERE NOT (city &lt;=&gt; prev_city)</code> without the first-row condition.</strong> Returns 83 rows.
+Customers 306 and 335 start with a NULL city; their first save looks unchanged and
+their first version is lost. For 335, that is the whole customer.</p>
+<p><strong><code>valid_to</code> set to the day before the next <code>valid_from</code>.</strong> Row count is right, values
+in <code>valid_to</code> are wrong. Both conventions exist in real warehouses. This problem asks
+for the exclusive end, where one version's <code>valid_to</code> equals the next one's
+<code>valid_from</code>; it makes "which version was valid on date D" a simple
+<code>valid_from &lt;= D AND (D &lt; valid_to OR valid_to IS NULL)</code>. Always check which one the
+target table uses.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Customers</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Moves away and back to the same city</td>
+<td>303, 312, 327</td>
+<td><code>GROUP BY city</code>.</td>
+</tr>
+<tr>
+<td>City removed (NULL), then set again</td>
+<td>318, 331</td>
+<td><code>&lt;&gt;</code> instead of <code>&lt;=&gt;</code>.</td>
+</tr>
+<tr>
+<td>Two NULL saves in a row</td>
+<td>318</td>
+<td>Treating every NULL as a change.</td>
+</tr>
+<tr>
+<td>First save has a NULL city</td>
+<td>306, 335</td>
+<td>Detecting the first row through <code>prev_city IS NULL</code>.</td>
+</tr>
+<tr>
+<td>Saved several times, never changed</td>
+<td>309</td>
+<td>No collapsing of no-op saves.</td>
+</tr>
+<tr>
+<td>Single save</td>
+<td>335, 340</td>
+<td><code>LEAD</code> returning NULL must mean current, not missing.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

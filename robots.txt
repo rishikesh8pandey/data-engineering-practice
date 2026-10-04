@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://rishikesh8pandey.github.io/data-engineering-practice/sitemap.xml

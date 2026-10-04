@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The union that swaps two columns | Debug the AI problem | Pipeline Practice</title>
+  <meta name="description" content="AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/union-swapped-columns/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The union that swaps two columns | Debug the AI problem | Pipeline Practice">
+  <meta property="og:description" content="AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/union-swapped-columns/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>The union that swaps two columns</h1>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/008-union-swapped-columns.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>Two regional teams each export their sales. An AI assistant wrote the job that
+combines the two exports and reports net revenue per product. It runs without
+errors and the order counts match what the teams expect.</p>
+<p>The net revenue does not. Some products look far less profitable than they are,
+and two products have negative revenue.</p>
+<p>The AI-written code is in the answer cell. Find the bug and fix it.</p>
+<h2>Input tables</h2>
+<h3><code>sales_north</code></h3>
+<p>One row per order from the north region.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique across both regions.</td>
+</tr>
+<tr>
+<td><code>product</code></td>
+<td>STRING</td>
+<td>Product name.</td>
+</tr>
+<tr>
+<td><code>gross_amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Order value before discount.</td>
+</tr>
+<tr>
+<td><code>discount_amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Discount given. NULL means no discount was recorded.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>sales_south</code></h3>
+<p>One row per order from the south region. Same columns as <code>sales_north</code>. Run
+<code>sales_south.printSchema()</code> before you trust that.</p>
+<h2>Requirement</h2>
+<p>Return net revenue per product across both regions.</p>
+<ul>
+<li>The net amount of an order is <code>gross_amount</code> minus <code>discount_amount</code>.
+  A NULL discount counts as 0.</li>
+<li><code>orders</code> is the number of orders of the product in both regions together.</li>
+<li><code>net_revenue</code> is the sum of the net amounts of those orders.</li>
+<li>A product sold in only one region still appears.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per product.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>product</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>orders</code></td>
+<td>BIGINT</td>
+<td>Number of orders.</td>
+</tr>
+<tr>
+<td><code>net_revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Sum of gross minus discount.</td>
+</tr>
+</tbody>
+</table>
+<h2>The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">F</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Net revenue per product across both regions.&quot;&quot;&quot;</span>
+    <span class="n">north</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;sales_north&quot;</span><span class="p">)</span>
+    <span class="n">south</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;sales_south&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Combine both regions into a single DataFrame</span>
+    <span class="n">all_sales</span> <span class="o">=</span> <span class="n">north</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">south</span><span class="p">)</span>
+
+    <span class="c1"># Net amount per order, treating a missing discount as zero</span>
+    <span class="n">all_sales</span> <span class="o">=</span> <span class="n">all_sales</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span>
+        <span class="s2">&quot;net_amount&quot;</span><span class="p">,</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;gross_amount&quot;</span><span class="p">)</span> <span class="o">-</span> <span class="n">F</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;discount_amount&quot;</span><span class="p">),</span> <span class="n">F</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Aggregate per product</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">all_sales</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;product&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;orders&quot;</span><span class="p">),</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;net_amount&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;decimal(12,2)&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;net_revenue&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">all_sales</span> <span class="o">=</span> <span class="n">north</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">south</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>DataFrame.union</code> matches columns by <strong>position</strong>. It ignores column names completely
+and keeps the names of the first DataFrame. The two tables have the same four columns
+in a different order:</p>
+<div class="codehilite"><pre><span></span><code>sales_north: order_id, product, gross_amount, discount_amount
+sales_south: order_id, product, discount_amount, gross_amount
+</code></pre></div>
+
+<p>So for every south row, the discount lands in <code>gross_amount</code> and the gross value lands
+in <code>discount_amount</code>. Net revenue for those rows becomes discount minus gross.</p>
+<p>Nothing stops it. Both columns are <code>DECIMAL(10,2)</code>, so the types line up and Spark has
+no reason to complain. If one had been a string, the job would have failed and
+somebody would have looked.</p>
+<p>What the output looks like:</p>
+<ul>
+<li><code>orders</code> is right for every product. Row counts are not affected by which column a
+  value sits in.</li>
+<li>"Standing Desk" is sold only in the north and is exactly right.</li>
+<li>"Footrest" is sold only in the south and comes out negative. "Webcam" is negative
+  too, because its south rows outweigh its north rows.</li>
+<li>The other five products are a mix of right and wrong rows and merely look low.</li>
+</ul>
+<h2>The fix</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">all_sales</span> <span class="o">=</span> <span class="n">north</span><span class="o">.</span><span class="n">unionByName</span><span class="p">(</span><span class="n">south</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>unionByName</code> matches columns by name. If a name is missing on one side it fails
+(unless you pass <code>allowMissingColumns=True</code>), which is what you want from a job that
+combines files from different teams.</p>
+<p>The alternative is to select the columns in the same order on both sides before a
+plain <code>union</code>. That works, but it has to be repeated wherever the tables meet.</p>
+<h2>The same bug in SQL</h2>
+<p><code>UNION</code> and <code>UNION ALL</code> in SQL are positional as well:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">sales_north</span>
+<span class="k">UNION</span><span class="w"> </span><span class="k">ALL</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">sales_south</span>
+</code></pre></div>
+
+<p>This has exactly the same bug. In SQL, list the columns by name on both sides, in the
+same order. Never <code>SELECT *</code> into a union.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Leaving <code>union</code> and fixing the arithmetic</strong> (taking the absolute value, or swapping
+the subtraction for the south). It makes this output right and leaves a DataFrame in
+which two columns mean different things depending on the row. The next person to use
+<code>all_sales</code> inherits the bug.</p>
+<p><strong>Dropping the <code>coalesce</code> while fixing the union.</strong> A NULL discount makes
+<code>gross - discount</code> NULL, and <code>sum</code> skips NULLs. Those orders then contribute nothing
+to revenue, although they were sold at full price.</p>
+<p><strong><code>UNION</code> instead of <code>UNION ALL</code> in SQL.</strong> <code>UNION</code> removes duplicate rows. It passes
+here because <code>order_id</code> makes every row unique, but two identical rows in a table
+without a key would be collapsed into one. Use <code>UNION ALL</code> unless you mean to
+de-duplicate.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Same columns, different order, same types</td>
+<td><code>sales_south</code></td>
+<td>The bug itself.</td>
+</tr>
+<tr>
+<td>Product sold only in the north</td>
+<td>Standing Desk</td>
+<td>Shows the bug touches only south rows.</td>
+</tr>
+<tr>
+<td>Product sold only in the south</td>
+<td>Footrest</td>
+<td>Makes the swap obvious: negative revenue.</td>
+</tr>
+<tr>
+<td>NULL discount</td>
+<td>about 15% of orders</td>
+<td>Losing full-price orders from the sum.</td>
+</tr>
+<tr>
+<td>Discount of 0.00</td>
+<td>about 20% of orders</td>
+<td>Treating 0 and NULL differently.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

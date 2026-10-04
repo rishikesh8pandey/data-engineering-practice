@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A data quality report that counts NULLs correctly | SQL problem | Pipeline Practice</title>
+  <meta name="description" content="Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/data-quality-report/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="A data quality report that counts NULLs correctly | SQL problem | Pipeline Practice">
+  <meta property="og:description" content="Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/data-quality-report/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>A data quality report that counts NULLs correctly</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge">data quality</span><span class="badge">nulls</span><span class="badge">not in</span><span class="badge">duplicates</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/006-data-quality-report.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>Before the <code>shipments</code> table is published each morning, a check has to report how
+many rows break each data quality rule. The report goes to a dashboard, so it must
+always list every rule, including the ones with no failures today.</p>
+<h2>Input tables</h2>
+<h3><code>shipments</code></h3>
+<p>Supposed to be one row per shipment.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shipment_id</code></td>
+<td>BIGINT</td>
+<td>Supposed to be unique.</td>
+</tr>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>The order being shipped.</td>
+</tr>
+<tr>
+<td><code>warehouse_code</code></td>
+<td>STRING</td>
+<td>The warehouse it shipped from.</td>
+</tr>
+<tr>
+<td><code>shipped_on</code></td>
+<td>DATE</td>
+<td>Never NULL.</td>
+</tr>
+<tr>
+<td><code>delivered_on</code></td>
+<td>DATE</td>
+<td>NULL while the shipment is in transit.</td>
+</tr>
+<tr>
+<td><code>weight_kg</code></td>
+<td>DOUBLE</td>
+<td>Weight of the parcel.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>warehouses</code></h3>
+<p>The list of warehouses.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>warehouse_code</code></td>
+<td>STRING</td>
+<td>The code used in <code>shipments</code>. One closed site has a NULL code.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>Where the warehouse is.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return one row for each of these six rules, with the number of rows in <code>shipments</code>
+that fail it. A rule that no row fails has <code>failed_rows</code> = 0.</p>
+<table>
+<thead>
+<tr>
+<th><code>rule_name</code></th>
+<th>A row fails when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>missing_shipment_id</code></td>
+<td><code>shipment_id</code> is NULL.</td>
+</tr>
+<tr>
+<td><code>missing_order_id</code></td>
+<td><code>order_id</code> is NULL.</td>
+</tr>
+<tr>
+<td><code>duplicate_shipment_id</code></td>
+<td>Its <code>shipment_id</code> has already appeared. For an id that occurs three times, two rows fail.</td>
+</tr>
+<tr>
+<td><code>delivered_before_shipped</code></td>
+<td><code>delivered_on</code> is earlier than <code>shipped_on</code>. A shipment still in transit does not fail. Delivery on the shipping date does not fail.</td>
+</tr>
+<tr>
+<td><code>invalid_weight</code></td>
+<td><code>weight_kg</code> is NULL, zero or negative.</td>
+</tr>
+<tr>
+<td><code>unknown_warehouse</code></td>
+<td><code>warehouse_code</code> is NULL, or does not exactly match a code in <code>warehouses</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2>Expected output</h2>
+<p>Exactly six rows.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rule_name</code></td>
+<td>STRING</td>
+<td>One of the six names above.</td>
+</tr>
+<tr>
+<td><code>failed_rows</code></td>
+<td>BIGINT</td>
+<td>Number of failing rows.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>Write one small query per rule and stack them with <code>UNION ALL</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="s1">&#39;missing_order_id&#39;</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">rule_name</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">failed_rows</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">shipments</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">order_id</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+</code></pre></div>
+
+<p>An aggregate without <code>GROUP BY</code> always returns exactly one row, even when no input row
+matches. So a rule with no failures reports 0 instead of vanishing from the report.</p>
+<p>The rules themselves are short. Each one has a NULL question hiding in it, and the
+whole problem is answering those correctly. In SQL, a comparison with NULL is neither
+true nor false; it is NULL, and <code>WHERE</code> keeps only rows where the condition is true.</p>
+<p>The correct counts on this data (206 rows):</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Failed rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>missing_shipment_id</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>missing_order_id</code></td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>duplicate_shipment_id</code></td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>delivered_before_shipped</code></td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>invalid_weight</code></td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>unknown_warehouse</code></td>
+<td>9</td>
+</tr>
+</tbody>
+</table>
+<h2>Common wrong answers</h2>
+<p><strong><code>warehouse_code NOT IN (SELECT warehouse_code FROM warehouses)</code>.</strong> Returns 0, not 9.
+The <code>warehouses</code> table contains a NULL code. <code>x NOT IN (a, b, NULL)</code> expands to
+<code>x &lt;&gt; a AND x &lt;&gt; b AND x &lt;&gt; NULL</code>, and the last part is never true. One NULL in the
+list makes <code>NOT IN</code> reject every row. This is the most expensive NULL mistake in SQL
+because the query does not fail, it reports that everything is fine.</p>
+<p>Filtering the NULL out of the list gives 5, still wrong: now the 4 shipments whose own
+<code>warehouse_code</code> is NULL are skipped, because <code>NULL NOT IN (...)</code> is NULL too.</p>
+<p>Use <code>NOT EXISTS</code> (or a <code>LEFT ANTI JOIN</code>). It asks "is there a matching row?", and for
+a NULL code the answer is plainly no.</p>
+<p><strong><code>weight_kg &lt;= 0</code> without the NULL check.</strong> Returns 7 instead of 13. The 6 rows with
+no weight at all are the worst ones, and they pass.</p>
+<p><strong><code>delivered_on &lt;= shipped_on</code>.</strong> Returns 35 instead of 5. Same-day delivery is valid.
+Note what goes right here without effort: rows still in transit have a NULL
+<code>delivered_on</code>, the comparison is NULL, and they are correctly not counted.</p>
+<p><strong>Counting duplicates the wrong way.</strong> There are 5 ids that occur more than once, and
+11 rows carry one of those ids. Neither is the answer. Four ids occur twice and one
+occurs three times, so 6 rows are surplus: <code>COUNT(shipment_id) - COUNT(DISTINCT
+shipment_id)</code>. Decide which of the three numbers a rule means before writing it.</p>
+<p><strong>Selecting the failing rows and then <code>GROUP BY rule_name</code>.</strong> Returns five rows.
+<code>missing_shipment_id</code> has no failing rows, so there is nothing to group and the rule
+drops out of the report. A dashboard cannot tell "no failures" from "check did not
+run".</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Count</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NULL <code>warehouse_code</code> in <code>warehouses</code></td>
+<td>1 row</td>
+<td><code>NOT IN</code> returning nothing.</td>
+</tr>
+<tr>
+<td>NULL <code>warehouse_code</code> in <code>shipments</code></td>
+<td>4 rows</td>
+<td><code>NOT IN</code> with a cleaned list; inner joins.</td>
+</tr>
+<tr>
+<td>Codes in the wrong case (<code>pnq1</code>, <code>blr1</code>)</td>
+<td>2 rows</td>
+<td>Assuming a lookup is case-insensitive.</td>
+</tr>
+<tr>
+<td>NULL weight</td>
+<td>6 rows</td>
+<td><code>weight_kg &lt;= 0</code> alone.</td>
+</tr>
+<tr>
+<td>Delivered on the shipping date</td>
+<td>about 30 rows</td>
+<td><code>&lt;=</code> instead of <code>&lt;</code>.</td>
+</tr>
+<tr>
+<td>Not delivered yet</td>
+<td>about 1 in 10 rows</td>
+<td>Treating NULL <code>delivered_on</code> as a failure.</td>
+</tr>
+<tr>
+<td>One id three times</td>
+<td>1 id</td>
+<td>Counting duplicated ids instead of surplus rows.</td>
+</tr>
+<tr>
+<td>A rule with no failures</td>
+<td><code>missing_shipment_id</code></td>
+<td>Reports that omit zero rows.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revenue per customer is higher than the ledger | Debug the AI problem | Pipeline Practice</title>
+  <meta name="description" content="An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/orders-payments-join/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Revenue per customer is higher than the ledger | Debug the AI problem | Pipeline Practice">
+  <meta property="og:description" content="An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/orders-payments-join/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Revenue per customer is higher than the ledger</h1>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge">joins</span><span class="badge">row duplication</span><span class="badge">aggregation</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/001-orders-payments-join.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>A teammate asked an AI assistant for a "revenue per customer" report and shipped what
+it wrote. The job runs without errors and the output looks reasonable. Finance has now
+compared it to the ledger: the report's total revenue is too high, and only some
+customers are off.</p>
+<p>The AI-written code is in the answer cell. Find the bug and fix it.</p>
+<h2>Input tables</h2>
+<h3><code>orders</code></h3>
+<p>One row per order.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who placed the order.</td>
+</tr>
+<tr>
+<td><code>order_date</code></td>
+<td>DATE</td>
+<td>Date the order was placed.</td>
+</tr>
+<tr>
+<td><code>order_amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Full value of the order in rupees.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>payments</code></h3>
+<p>One row per payment attempt. An order can have no rows here, one row, or several:
+a failed attempt followed by a retry, or an order paid in two or three parts.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>payment_id</code></td>
+<td>BIGINT</td>
+<td>Unique per payment attempt.</td>
+</tr>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>The order the attempt was for. A few rows point to orders that are not in <code>orders</code>.</td>
+</tr>
+<tr>
+<td><code>paid_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the attempt happened.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Amount of this attempt in rupees.</td>
+</tr>
+<tr>
+<td><code>method</code></td>
+<td>STRING</td>
+<td><code>upi</code>, <code>card</code>, <code>netbanking</code> or <code>wallet</code>.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>STRING</td>
+<td><code>SUCCESS</code>, <code>FAILED</code> or <code>PENDING</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<ul>
+<li>An order is <strong>paid</strong> if it has at least one <code>SUCCESS</code> payment.</li>
+<li>A customer's <strong>revenue</strong> is the sum of <code>order_amount</code> over their paid orders.
+  Each paid order counts once, however many payments it took.</li>
+<li>Every customer in <code>orders</code> must appear in the result. A customer with no paid
+  orders has <code>paid_orders</code> = 0 and <code>revenue</code> = 0.00.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per customer.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>paid_orders</code></td>
+<td>BIGINT</td>
+<td>Number of paid orders.</td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Sum of <code>order_amount</code> over paid orders.</td>
+</tr>
+</tbody>
+</table>
+<h2>The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">F</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Revenue per customer from paid orders.&quot;&quot;&quot;</span>
+    <span class="n">orders</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;orders&quot;</span><span class="p">)</span>
+    <span class="n">payments</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;payments&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Only successful payments count towards a paid order</span>
+    <span class="n">successful_payments</span> <span class="o">=</span> <span class="n">payments</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;SUCCESS&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Left join so that customers without any paid orders are still included</span>
+    <span class="n">orders_with_payments</span> <span class="o">=</span> <span class="n">orders</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">successful_payments</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;order_id&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Aggregate per customer</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">orders_with_payments</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">countDistinct</span><span class="p">(</span>
+            <span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;payment_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isNotNull</span><span class="p">(),</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;order_id&quot;</span><span class="p">))</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;paid_orders&quot;</span><span class="p">),</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">coalesce</span><span class="p">(</span>
+            <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;payment_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isNotNull</span><span class="p">(),</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;order_amount&quot;</span><span class="p">))),</span>
+            <span class="n">F</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;decimal(12,2)&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;revenue&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The bug</h2>
+<p>The code joins <code>orders</code> to the successful rows of <code>payments</code> and then sums
+<code>order_amount</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">orders_with_payments</span> <span class="o">=</span> <span class="n">orders</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">successful_payments</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;order_id&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;payment_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isNotNull</span><span class="p">(),</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;order_amount&quot;</span><span class="p">)))</span>
+</code></pre></div>
+
+<p><code>orders</code> has one row per order. <code>payments</code> has one row per payment attempt. After the
+join, the result has one row per successful payment, and <code>order_amount</code> is repeated on
+each of those rows. An order paid in two parts contributes its amount twice, an order
+paid in three parts three times.</p>
+<p>In this data, 16 of the 122 paid orders were paid in parts (13 in two, 3 in three).
+That inflates revenue for 11 of the 39 customers. The report totals 19,13,061.10
+against a correct 16,47,998.15.</p>
+<p>What makes it hard to spot:</p>
+<ul>
+<li><code>paid_orders</code> is correct. The code uses <code>countDistinct</code>, which hides the repeated
+  rows for the count. Whoever wrote it handled the duplication for one column and not
+  for the other.</li>
+<li>28 customers are exactly right, because none of their orders were paid in parts.
+  Spot-checking a few customers can easily pass.</li>
+<li>Nothing fails. The row count is right and every number is plausible.</li>
+</ul>
+<h2>The approach</h2>
+<p>Before joining two tables, write down the grain of each one and the grain of the result.</p>
+<ul>
+<li><code>orders</code>: one row per order.</li>
+<li><code>payments</code>: one row per payment attempt.</li>
+<li><code>orders</code> joined to <code>payments</code>: one row per payment attempt (or one row for an order
+  with no match, in a left join).</li>
+</ul>
+<p><code>order_amount</code> is a fact about an order. Summing it is only valid on a set of rows that
+has one row per order. So bring <code>payments</code> down to one row per order first, then join:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="n">paid_orders</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="k">DISTINCT</span><span class="w"> </span><span class="n">order_id</span>
+<span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">payments</span>
+<span class="w">    </span><span class="k">WHERE</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span>
+<span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="p">...</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="n">o</span>
+<span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">paid_orders</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">order_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">order_id</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">customer_id</span>
+</code></pre></div>
+
+<p><code>paid_orders</code> has at most one row per order, so the join cannot repeat an order. After
+that, <code>COUNT(p.order_id)</code> counts the paid orders and a plain <code>SUM</code> is correct.</p>
+<p>The general rule: aggregate or de-duplicate the "many" side to the grain of the "one"
+side before the join, not after it.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Adding <code>.distinct()</code> after the join.</strong> It removes nothing. The joined rows differ in
+<code>payment_id</code>, <code>paid_at</code> and <code>amount</code>, so no two rows are identical. Revenue stays wrong.</p>
+<p><strong><code>SUM(DISTINCT order_amount)</code>.</strong> It appears to work, because the repeated amounts of
+one order collapse to one. But it also collapses two different orders that happen to
+have the same amount. Customer 117 has two separate paid orders of 499.00 each, and
+this version counts only one of them. De-duplicating on a measure is never safe; the
+key is <code>order_id</code>, not the amount.</p>
+<p><strong>Switching to an inner join, or filtering <code>status = 'SUCCESS'</code> after the left join.</strong>
+Both drop every order without a successful payment, and with them customers 139 and
+140, who have no paid orders at all. The result has 37 rows instead of 39. The
+requirement says those customers must appear with 0 and 0.00.</p>
+<p><strong>Summing <code>payments.amount</code> instead of <code>order_amount</code>.</strong> This passes the check on this
+data, because every paid order here was paid in full, so its payments add up to the
+order amount. It answers a different question though: cash collected, not order value
+of paid orders. The two differ as soon as an order is partly paid or overpaid.</p>
+<p><strong><code>dropDuplicates(["order_id"])</code> after the join.</strong> This gives the right answer. It is
+still the weaker fix: it keeps an arbitrary payment row per order and relies on nobody
+later using a payment column from that DataFrame. Reducing <code>payments</code> before the join
+makes the grain explicit.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Order paid in two or three <code>SUCCESS</code> payments</td>
+<td>16 orders</td>
+<td>The bug itself.</td>
+</tr>
+<tr>
+<td><code>FAILED</code> attempt, then <code>SUCCESS</code></td>
+<td>several orders</td>
+<td>Forgetting to filter on <code>status</code> before deciding an order is paid.</td>
+</tr>
+<tr>
+<td>Orders with only <code>FAILED</code> or <code>PENDING</code> attempts</td>
+<td>17 orders</td>
+<td>Treating "has a payment row" as "paid".</td>
+</tr>
+<tr>
+<td>Orders with no payment rows</td>
+<td>11 orders</td>
+<td>Inner join drops them.</td>
+</tr>
+<tr>
+<td>Customers with no paid orders</td>
+<td>139 and 140</td>
+<td>Inner join drops the customer; missing <code>COALESCE</code> gives NULL instead of 0.00.</td>
+</tr>
+<tr>
+<td>Two paid orders with the same amount</td>
+<td>customer 117, 499.00 twice</td>
+<td><code>SUM(DISTINCT order_amount)</code>.</td>
+</tr>
+<tr>
+<td>Payments pointing to orders not in <code>orders</code></td>
+<td>2 rows, order ids 9001 and 9002</td>
+<td>Driving the query from <code>payments</code> instead of <code>orders</code>.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

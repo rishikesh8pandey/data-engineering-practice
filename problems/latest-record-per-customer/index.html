@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keep the latest record per customer | SQL problem | Pipeline Practice</title>
+  <meta name="description" content="A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/latest-record-per-customer/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Keep the latest record per customer | SQL problem | Pipeline Practice">
+  <meta property="og:description" content="A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/latest-record-per-customer/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Keep the latest record per customer</h1>
+  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge">deduplication</span><span class="badge">window functions</span><span class="badge">nulls</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/002-latest-record-per-customer.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>A source system sends a row to <code>customer_updates</code> every time a customer record changes.
+The downstream <code>customers</code> table must hold the current state: one row per customer.</p>
+<p>The feed is not clean. The same row is sometimes delivered twice, some corrections
+arrive with the same <code>updated_at</code> as the row they correct, and some rows have no
+<code>updated_at</code> at all.</p>
+<h2>Input tables</h2>
+<h3><code>customer_updates</code></h3>
+<p>One row per delivered change. A customer has one or more rows.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer the change is for.</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>STRING</td>
+<td>Email after the change.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>City after the change. NULL means the customer has no city on record.</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the change happened in the source system. Can be NULL.</td>
+</tr>
+<tr>
+<td><code>ingested_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the row arrived in the feed. Never NULL.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return the current row for every customer.</p>
+<ul>
+<li>The current row is the one with the latest <code>updated_at</code>.</li>
+<li>If two rows of a customer have the same <code>updated_at</code>, the one with the later
+  <code>ingested_at</code> wins. It is a correction of the other.</li>
+<li>A row with no <code>updated_at</code> is older than any row that has one. It is only the
+  current row if the customer has no dated rows.</li>
+<li>A row delivered twice must not produce two output rows.</li>
+<li>Take all output columns from the same input row. If the current row has a NULL
+  <code>city</code>, the output has a NULL <code>city</code>.</li>
+</ul>
+<h2>Expected output</h2>
+<p>Exactly one row per customer.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>STRING</td>
+<td>From the current row.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>From the current row. Can be NULL.</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>From the current row. Can be NULL.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>"One row per key, picked by a rule" is a job for <code>ROW_NUMBER()</code>. Number the rows of
+each customer so that the wanted row gets number 1, then keep number 1.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">customer_id</span><span class="p">,</span><span class="w"> </span><span class="n">email</span><span class="p">,</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="n">updated_at</span>
+<span class="k">FROM</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">SELECT</span>
+<span class="w">        </span><span class="o">*</span><span class="p">,</span>
+<span class="w">        </span><span class="n">ROW_NUMBER</span><span class="p">()</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">            </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">customer_id</span>
+<span class="w">            </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">updated_at</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="n">NULLS</span><span class="w"> </span><span class="k">LAST</span><span class="p">,</span><span class="w"> </span><span class="n">ingested_at</span><span class="w"> </span><span class="k">DESC</span>
+<span class="w">        </span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">rn</span>
+<span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">customer_updates</span>
+<span class="p">)</span><span class="w"> </span><span class="n">ranked</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">rn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</code></pre></div>
+
+<p>The work is all in the <code>ORDER BY</code>. It has to turn every rule of the requirement into a
+sort key, in priority order:</p>
+<ol>
+<li><code>updated_at DESC</code>: the latest change first.</li>
+<li><code>NULLS LAST</code>: a row without <code>updated_at</code> loses to any dated row.</li>
+<li><code>ingested_at DESC</code>: among rows with the same <code>updated_at</code>, the correction first.</li>
+</ol>
+<p><code>ROW_NUMBER()</code> hands out 1 exactly once per customer, so the output cannot have two
+rows for a customer, whatever the data looks like. A row delivered twice needs no
+special handling: both copies are identical, one gets number 1, the other number 2.</p>
+<p>In Spark, <code>DESC</code> already sorts NULLs last, so leaving out <code>NULLS LAST</code> gives the same
+result here. Write it anyway. It tells the next reader the NULL case was thought about,
+and the default differs between engines.</p>
+<h2>Common wrong answers</h2>
+<p>The feed has 120 rows for 40 customers, so the correct output has 40 rows.</p>
+<p><strong><code>MAX(updated_at)</code> per customer, joined back to the feed.</strong> Returns 47 rows. The join
+matches every row that has the maximum timestamp: both rows of a tie (5 customers) and
+both copies of a latest row delivered twice (4 customers). It also loses customers 239
+and 240, whose only row has a NULL <code>updated_at</code>: their maximum is NULL, and
+<code>updated_at = NULL</code> never matches. Adding <code>DISTINCT</code> removes the repeated copies but
+not the ties or the missing customers, and gives 43 rows.</p>
+<p><strong><code>RANK()</code> instead of <code>ROW_NUMBER()</code>.</strong> Returns 49 rows. <code>RANK()</code> gives the same number
+to rows that tie on the sort keys, so every tie and every repeated latest row comes
+through twice.</p>
+<p><strong><code>ROW_NUMBER()</code> ordered by <code>updated_at DESC</code> only.</strong> Returns 40 rows, but which of two
+tied rows gets number 1 is left to chance. On this data it picks the wrong <code>city</code> for
+at least one of the five tied customers. This is the dangerous version: the row count is right,
+it can pass a test today and return a different row after the data is repartitioned.
+If the sort keys do not identify a single row, the query is not deterministic.</p>
+<p><strong>Ordering by <code>ingested_at DESC</code> only.</strong> Arrival order is not change order. Customers
+207, 220 and 233 have a row without <code>updated_at</code> that arrived last; this version makes
+it the current row.</p>
+<p><strong><code>MAX()</code> on every column with <code>GROUP BY customer_id</code>.</strong> Returns 40 rows, each of them
+possibly a row that never existed: the largest email from one version next to the
+largest city from another. It also cannot return a NULL <code>city</code> when an older version
+had one (customers 210 and 225). Pick a row first, then read its columns.</p>
+<p><strong><code>SELECT DISTINCT</code>.</strong> Removes only the 8 identical copies and returns 112 rows. It
+does nothing about older versions.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Customers</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Two rows with the same <code>updated_at</code>, different <code>city</code></td>
+<td>203, 211, 219, 226, 234</td>
+<td>No tie-breaker; <code>RANK()</code>; <code>MAX</code> join.</td>
+</tr>
+<tr>
+<td>Latest row delivered twice</td>
+<td>205, 214, 222, 231</td>
+<td><code>MAX</code> join and <code>RANK()</code> return both copies.</td>
+</tr>
+<tr>
+<td>An older row delivered twice</td>
+<td>208, 217, 229, 238</td>
+<td><code>SELECT DISTINCT</code> treated as the whole solution.</td>
+</tr>
+<tr>
+<td>Extra row with NULL <code>updated_at</code> that arrived last</td>
+<td>207, 220, 233</td>
+<td>Ordering by <code>ingested_at</code>; <code>NULLS FIRST</code>.</td>
+</tr>
+<tr>
+<td>Only row has NULL <code>updated_at</code></td>
+<td>239, 240</td>
+<td><code>MAX</code> join drops the customer.</td>
+</tr>
+<tr>
+<td>Latest row has NULL <code>city</code></td>
+<td>210, 225</td>
+<td><code>MAX(city)</code>, or "fixing" NULLs with an older value.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

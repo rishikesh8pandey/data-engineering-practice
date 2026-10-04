@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The incremental load that loses late events | PySpark problem | Pipeline Practice</title>
+  <meta name="description" content="A nightly incremental load filters on event time and silently skips events that arrive late. Work out with PySpark which run should load each event, exactly once.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/incremental-load-late-events/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The incremental load that loses late events | PySpark problem | Pipeline Practice">
+  <meta property="og:description" content="A nightly incremental load filters on event time and silently skips events that arrive late. Work out with PySpark which run should load each event, exactly once.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/incremental-load-late-events/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>The incremental load that loses late events</h1>
+  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge">incremental load</span><span class="badge">late-arriving data</span><span class="badge">watermark</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/003-incremental-load-late-events.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>A nightly job copies new rows from an event feed into the warehouse. To pick up only
+new rows, it filters on <code>event_time &gt; time of the previous run</code>.</p>
+<p>Some events reach the feed hours or days after they happened. By then a later run has
+already moved past their <code>event_time</code>, so they are never loaded. The warehouse is
+missing events and nobody gets an error.</p>
+<p>You are rebuilding the load logic. For every run in the history, work out which
+events that run should have loaded.</p>
+<h2>Input tables</h2>
+<h3><code>events</code></h3>
+<p>One row per delivery of an event to the feed. An event is normally delivered once,
+but the feed sometimes delivers the same event again later.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_id</code></td>
+<td>BIGINT</td>
+<td>Identifies the event. Repeated if the event was delivered again.</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td>The user who triggered the event.</td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td>STRING</td>
+<td><code>page_view</code>, <code>search</code>, <code>add_to_cart</code> or <code>purchase</code>.</td>
+</tr>
+<tr>
+<td><code>event_time</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the event happened.</td>
+</tr>
+<tr>
+<td><code>ingested_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When this delivery arrived in the feed. Always later than <code>event_time</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>load_runs</code></h3>
+<p>One row per run of the load job.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_id</code></td>
+<td>BIGINT</td>
+<td>Unique per run.</td>
+</tr>
+<tr>
+<td><code>run_time</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>The cutoff of the run. The run can see everything that had arrived by this time.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<ul>
+<li>A run loads the events that arrived after the previous run's <code>run_time</code> and up to
+  and including its own <code>run_time</code>. The first run loads everything that had arrived
+  by its <code>run_time</code>.</li>
+<li>"Arrived" means <code>ingested_at</code>. When the event happened does not matter.</li>
+<li>Each event is loaded exactly once, by the run that covers its first delivery.
+  A later delivery of the same event is ignored.</li>
+<li>Events that arrived after the last run are not loaded yet and are not in the result.</li>
+<li>A run with nothing to load has no rows in the result.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per loaded event.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>run_id</code></td>
+<td>BIGINT</td>
+<td>The run that loads the event.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>An incremental load has to answer one question per run: "what is new since last
+time?" New means "arrived since last time", so the filter belongs on the arrival
+time, <code>ingested_at</code>. <code>event_time</code> says when something happened in the real world,
+and the feed gives no promise that events arrive in that order.</p>
+<p>Three steps:</p>
+<ol>
+<li>Give every run its window. A run owns the arrivals after the previous run's
+   <code>run_time</code> and up to its own. <code>LAG(run_time)</code> over the runs in time order gives the
+   lower bound, which is NULL for the first run.</li>
+<li>Reduce every event to its first arrival with <code>MIN(ingested_at)</code> per <code>event_id</code>.
+   That makes a redelivered event indistinguishable from one delivered once.</li>
+<li>Join each event to the run whose window contains its first arrival.</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="n">run_windows</span> <span class="o">=</span> <span class="n">runs</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;prev_run_time&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">lag</span><span class="p">(</span><span class="s2">&quot;run_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">Window</span><span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="s2">&quot;run_time&quot;</span><span class="p">)))</span>
+<span class="n">first_arrival</span> <span class="o">=</span> <span class="n">events</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;event_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="s2">&quot;ingested_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;first_ingested_at&quot;</span><span class="p">))</span>
+
+<span class="n">in_window</span> <span class="o">=</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;first_ingested_at&quot;</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;run_time&quot;</span><span class="p">))</span> <span class="o">&amp;</span> <span class="p">(</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prev_run_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isNull</span><span class="p">()</span> <span class="o">|</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;first_ingested_at&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prev_run_time&quot;</span><span class="p">))</span>
+<span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">first_arrival</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">run_windows</span><span class="p">,</span> <span class="n">in_window</span><span class="p">,</span> <span class="s2">&quot;inner&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;event_id&quot;</span><span class="p">,</span> <span class="s2">&quot;run_id&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The windows are half-open: <code>&gt;</code> on the lower bound, <code>&lt;=</code> on the upper. Every moment
+in time then belongs to exactly one run, so no event is loaded twice and none falls
+between two runs.</p>
+<p>The feed has 193 rows for 183 events. 21 events arrived after the last run, which
+leaves 162 to load.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Windows on <code>event_time</code>, restricted to what had arrived.</strong> This is the original job:
+at each run, take rows with <code>event_time</code> after the previous cutoff that are already in
+the feed. It returns 141 rows. The 21 events that happened before one cutoff but
+arrived after it are never picked up by any run.</p>
+<p><strong>Windows on <code>event_time</code> alone.</strong> Returns 170 rows. It assigns events to runs that
+could not have seen them yet, and it "loads" events that only arrived after the last
+run.</p>
+<p><strong>No handling of redelivery.</strong> Joining every row of <code>events</code> to the windows returns
+166 rows: an event delivered again in a later window is loaded by both runs. Adding
+<code>DISTINCT</code> only removes the repeats that fall into the same window as the first
+delivery, and still returns 164.</p>
+<p><strong>Using the last arrival instead of the first.</strong> Returns 159 rows. Events whose second
+delivery came after the last run disappear, although their first delivery was loaded
+long before.</p>
+<p><strong>Getting the boundary the wrong way round.</strong> With <code>&lt;</code> on the upper bound and <code>&gt;=</code> on
+the lower, the row count is still 162, but the three events that arrived exactly at a
+<code>run_time</code> move to the following run. With <code>&gt;=</code> and <code>&lt;=</code> together (or <code>BETWEEN</code>),
+those three events are loaded by two runs each, giving 165 rows.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Events that arrive 6 to 60 hours late</td>
+<td>21 of them cross a run boundary</td>
+<td>Filtering on <code>event_time</code>.</td>
+</tr>
+<tr>
+<td>Arrival exactly at a <code>run_time</code></td>
+<td>events 9501, 9502, 9503</td>
+<td><code>&lt;</code> vs <code>&lt;=</code>, and <code>BETWEEN</code>.</td>
+</tr>
+<tr>
+<td>Event delivered twice</td>
+<td>10 events</td>
+<td>Loading the same event in two runs.</td>
+</tr>
+<tr>
+<td>Events that arrived after the last run</td>
+<td>21 events</td>
+<td>Assigning by <code>event_time</code>; inventing a run for them.</td>
+</tr>
+<tr>
+<td>A run with nothing to load</td>
+<td>run 5, a rerun 30 minutes after run 4</td>
+<td>Assuming every run has rows.</td>
+</tr>
+<tr>
+<td>First run has no previous run</td>
+<td>run 1</td>
+<td>A lower bound of NULL that silently matches nothing.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

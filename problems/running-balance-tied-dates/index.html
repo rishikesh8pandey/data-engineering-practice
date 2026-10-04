@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The running balance that jumps ahead | Debug the AI problem | Pipeline Practice</title>
+  <meta name="description" content="An AI-written Spark SQL window query computes a running account balance, but transactions on the same date all show the end-of-day balance. Find the window frame bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/running-balance-tied-dates/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The running balance that jumps ahead | Debug the AI problem | Pipeline Practice">
+  <meta property="og:description" content="An AI-written Spark SQL window query computes a running account balance, but transactions on the same date all show the end-of-day balance. Find the window frame bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/running-balance-tied-dates/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>The running balance that jumps ahead</h1>
+  <p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge">window functions</span><span class="badge">running total</span><span class="badge">window frame</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/005-running-balance-tied-dates.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>The statements team needs the account balance after every transaction. An AI assistant
+wrote the query in the answer cell. It runs, returns one row per transaction, and for
+many accounts every number is right.</p>
+<p>Support has a complaint from a customer: two transactions on the same day both show
+the same balance, and it is not the balance after either of them alone.</p>
+<p>Find the bug and fix it.</p>
+<h2>Input tables</h2>
+<h3><code>transactions</code></h3>
+<p>One row per transaction.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>txn_id</code></td>
+<td>BIGINT</td>
+<td>Unique. Within a date, a lower <code>txn_id</code> was processed earlier.</td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td>BIGINT</td>
+<td>The account.</td>
+</tr>
+<tr>
+<td><code>txn_date</code></td>
+<td>DATE</td>
+<td>The date of the transaction. An account can have several on one date.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Positive for money in, negative for money out.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>For every transaction, return the account's balance immediately after it.</p>
+<ul>
+<li>Every account starts at 0.</li>
+<li>Transactions of an account are applied in order of <code>txn_date</code>, and within a date
+  in order of <code>txn_id</code>.</li>
+<li><code>balance_after</code> is the sum of the account's amounts up to and including that
+  transaction.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per transaction.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>txn_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>account_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>txn_date</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>balance_after</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Balance right after this transaction.</td>
+</tr>
+</tbody>
+</table>
+<h2>The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="c1">-- Running balance per account: cumulative sum of amounts in date order</span>
+<span class="k">SELECT</span>
+<span class="w">    </span><span class="n">txn_id</span><span class="p">,</span>
+<span class="w">    </span><span class="n">account_id</span><span class="p">,</span>
+<span class="w">    </span><span class="n">txn_date</span><span class="p">,</span>
+<span class="w">    </span><span class="n">amount</span><span class="p">,</span>
+<span class="w">    </span><span class="k">CAST</span><span class="p">(</span>
+<span class="w">        </span><span class="k">SUM</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">            </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">account_id</span>
+<span class="w">            </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">txn_date</span>
+<span class="w">        </span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">    </span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">balance_after</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">transactions</span>
+</pre></div>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="k">SUM</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">account_id</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">txn_date</span><span class="p">)</span>
+</code></pre></div>
+
+<p>A window with <code>ORDER BY</code> and no explicit frame gets this default frame:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">RANGE</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="n">UNBOUNDED</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">CURRENT</span><span class="w"> </span><span class="k">ROW</span>
+</code></pre></div>
+
+<p><code>RANGE</code> works on values, not on rows. "Current row" in a <code>RANGE</code> frame means the
+current row and every other row with the same <code>ORDER BY</code> value. The query orders by
+<code>txn_date</code> only, so all transactions of an account on the same date are peers. Each of
+them gets the sum up to the end of that date.</p>
+<p>That is exactly the complaint: two transactions on one day show the same balance, and
+it is the balance after both.</p>
+<p>Why it is easy to miss:</p>
+<ul>
+<li>An account whose transactions are all on different dates has no peers, so every
+  number is right. That is 4 of the 25 accounts here.</li>
+<li>For the other 21 accounts, only the rows that share a date with a later transaction
+  are off: 46 of the 203 rows. The last transaction of each date is always right.</li>
+<li>Daily closing balances are correct, so any reconciliation at day level passes.</li>
+</ul>
+<h2>The fix</h2>
+<p>Say which rows you mean, and make the order unique:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SUM</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">account_id</span>
+<span class="w">    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">txn_date</span><span class="p">,</span><span class="w"> </span><span class="n">txn_id</span>
+<span class="w">    </span><span class="k">ROWS</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="n">UNBOUNDED</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">CURRENT</span><span class="w"> </span><span class="k">ROW</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>Either change alone needs care:</p>
+<ul>
+<li>Adding <code>txn_id</code> to the <code>ORDER BY</code> and keeping the default frame also passes. With a
+  unique ordering no row has peers, so <code>RANGE</code> and <code>ROWS</code> mean the same thing.</li>
+<li>Adding <code>ROWS ...</code> and still ordering by <code>txn_date</code> alone is not a fix. The frame is
+  now row-based, but Spark is free to put two same-date transactions in either order.
+  The result can change between runs, and on this data it comes out wrong.</li>
+</ul>
+<p>Do both. A running total needs a total order.</p>
+<p>The same default frame is behind the well-known <code>LAST_VALUE</code> surprise: with only an
+<code>ORDER BY</code>, <code>LAST_VALUE</code> returns the current row's own value (or a peer's), because
+the frame stops there.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>ROWS</code> frame with <code>ORDER BY txn_date</code>.</strong> Described above: not deterministic, and
+wrong on this data.</p>
+<p><strong>Ordering by <code>txn_id</code> alone.</strong> This passes here, because the ids in this table happen
+to increase with the date. The statement only promises the order of ids within a date.
+A late-posted transaction with a high id and an old date would break it. Order by the
+business rule you were given: date first, then id.</p>
+<p><strong>Dropping <code>PARTITION BY account_id</code>.</strong> One running total across all accounts.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Several transactions on one date</td>
+<td>21 of 25 accounts</td>
+<td>The default <code>RANGE</code> frame.</td>
+</tr>
+<tr>
+<td>No two transactions on the same date</td>
+<td>accounts 704, 711, 718, 723</td>
+<td>Shows why spot checks pass.</td>
+</tr>
+<tr>
+<td>Money in and out on the same date</td>
+<td>many accounts</td>
+<td>Makes the peers' shared balance visibly wrong for both rows.</td>
+</tr>
+<tr>
+<td><code>txn_id</code> order within a date differs from row order in the file</td>
+<td>everywhere</td>
+<td>Relying on input order instead of <code>ORDER BY</code>.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

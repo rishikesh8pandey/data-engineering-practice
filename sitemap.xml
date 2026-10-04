@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/orders-payments-join/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/latest-record-per-customer/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/incremental-load-late-events/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/scd2-history-from-saves/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/running-balance-tied-dates/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/data-quality-report/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/sessionize-page-views/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/union-swapped-columns/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/merge-overlapping-periods/</loc></url>
+  <url><loc>https://rishikesh8pandey.github.io/data-engineering-practice/problems/asof-exchange-rate-join/</loc></url>
+</urlset>

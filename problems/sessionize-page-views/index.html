@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sessionize page views with a 30-minute gap | PySpark problem | Pipeline Practice</title>
+  <meta name="description" content="Group raw page views into user sessions with PySpark window functions. A session ends after more than 30 minutes of inactivity. Covers the exact boundary, long sessions and sessions across midnight.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/sessionize-page-views/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Sessionize page views with a 30-minute gap | PySpark problem | Pipeline Practice">
+  <meta property="og:description" content="Group raw page views into user sessions with PySpark window functions. A session ends after more than 30 minutes of inactivity. Covers the exact boundary, long sessions and sessions across midnight.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/sessionize-page-views/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Sessionize page views with a 30-minute gap</h1>
+  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge">sessionization</span><span class="badge">window functions</span><span class="badge">lag</span><span class="badge">gaps and islands</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/007-sessionize-page-views.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>The product team wants session-level numbers: how many sessions a user has and how
+long they last. The tracking system only records individual page views, so the
+sessions have to be derived.</p>
+<h2>Input tables</h2>
+<h3><code>page_views</code></h3>
+<p>One row per page view.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td>The user.</td>
+</tr>
+<tr>
+<td><code>viewed_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the page was viewed. Two views of a user can share the same instant.</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>STRING</td>
+<td>The page path.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Group each user's page views into sessions and return one row per session.</p>
+<ul>
+<li>A user's first view starts their first session.</li>
+<li>A view starts a new session if it comes <strong>more than 30 minutes</strong> after the user's
+  previous view. A gap of exactly 30 minutes continues the session.</li>
+<li>The gap is always measured from the previous view, not from the start of the
+  session. A session can last for hours as long as no gap exceeds 30 minutes.</li>
+<li>Sessions do not stop at midnight.</li>
+<li><code>session_number</code> counts a user's sessions in time order, starting at 1.</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per session.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>session_number</code></td>
+<td>BIGINT</td>
+<td>1 for the user's first session, 2 for the next, and so on.</td>
+</tr>
+<tr>
+<td><code>session_start</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>Time of the first view in the session.</td>
+</tr>
+<tr>
+<td><code>session_end</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>Time of the last view in the session.</td>
+</tr>
+<tr>
+<td><code>page_views</code></td>
+<td>BIGINT</td>
+<td>Number of views in the session.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>Sessionization is a "gaps and islands" problem, and it has a standard three-step
+solution.</p>
+<p><strong>1. Flag the views that start a session.</strong> Look at the user's previous view with
+<code>lag</code>. A view starts a session if there is no previous view, or the previous view is
+more than 30 minutes back.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">by_time</span> <span class="o">=</span> <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;user_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="s2">&quot;viewed_at&quot;</span><span class="p">)</span>
+<span class="n">previous</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">lag</span><span class="p">(</span><span class="s2">&quot;viewed_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">by_time</span><span class="p">)</span>
+<span class="n">starts_session</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span>
+    <span class="n">previous</span><span class="o">.</span><span class="n">isNull</span><span class="p">()</span> <span class="o">|</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;viewed_at&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">previous</span> <span class="o">+</span> <span class="n">F</span><span class="o">.</span><span class="n">expr</span><span class="p">(</span><span class="s2">&quot;INTERVAL 30 MINUTES&quot;</span><span class="p">)),</span> <span class="mi">1</span>
+<span class="p">)</span><span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>2. Turn the flags into a session number.</strong> A running sum of the flags goes up by one
+at every session start and stays level in between. That running sum is the session
+number.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;starts_session&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">by_time</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>3. Aggregate.</strong> Group by <code>user_id</code> and <code>session_number</code> and take <code>min</code>, <code>max</code> and
+<code>count</code>.</p>
+<p>The 219 views of 30 users form 55 sessions.</p>
+<p>A detail in step 2: the window has no <code>rowsBetween</code>. With the default frame, two views
+at the same instant are peers and get the same running sum, so they cannot be split
+across two sessions whichever of them Spark happens to sort first. For a running
+balance that peer behaviour is a bug; here it is what you want. Know which frame you
+are getting and why.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>&gt;=</code> instead of <code>&gt;</code>.</strong> Returns 60 sessions. A gap of exactly 30 minutes is still the
+same session by the rule given. Boundaries like this are a business decision, so use
+the comparison the requirement states and test the exact boundary.</p>
+<p><strong>Partitioning by user and date.</strong> Returns 56 sessions. User 9 views a page at 23:50
+and another at 00:05. Adding the date to the partition cuts that session in two.</p>
+<p><strong>Fixed 30-minute buckets</strong> (<code>F.window("viewed_at", "30 minutes")</code>, or dividing the
+timestamp by 1800). Buckets measure time from the clock, not from the previous view.
+A view at 10:29 and one at 10:31 land in different buckets, and a three-hour session
+with a view every 20 minutes (user 7) is chopped into pieces.</p>
+<p><strong>Measuring the gap from the start of the session.</strong> This caps every session at 30
+minutes. The rule is about inactivity: user 7's ten views, 20 minutes apart, are one
+session three hours long.</p>
+<p><strong>Forgetting the first view.</strong> <code>lag</code> returns NULL for a user's first view, and NULL
+compared with anything is NULL. Without the explicit <code>isNull()</code> check the first view
+gets flag 0, and the user's sessions are numbered from 0.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Users</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gap of exactly 30 minutes</td>
+<td>3, 11, 19</td>
+<td><code>&gt;=</code> instead of <code>&gt;</code>.</td>
+</tr>
+<tr>
+<td>Gap of 30 minutes and 1 second</td>
+<td>5, 14</td>
+<td>A tolerance that is too generous.</td>
+</tr>
+<tr>
+<td>Ten views, 20 minutes apart</td>
+<td>7</td>
+<td>Buckets; measuring from the session start.</td>
+</tr>
+<tr>
+<td>Session across midnight</td>
+<td>9</td>
+<td>Partitioning by date.</td>
+</tr>
+<tr>
+<td>Two views at the same instant</td>
+<td>12</td>
+<td>A row-based frame splitting peers; duplicates dropped by mistake.</td>
+</tr>
+<tr>
+<td>Single view</td>
+<td>30</td>
+<td>Sessions of one view, where start equals end.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>

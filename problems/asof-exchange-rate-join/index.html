@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Convert each transaction with the rate valid at the time | PySpark problem | Pipeline Practice</title>
+  <meta name="description" content="A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/asof-exchange-rate-join/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Convert each transaction with the rate valid at the time | PySpark problem | Pipeline Practice">
+  <meta property="og:description" content="A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/asof-exchange-rate-join/">
+  <meta property="og:site_name" content="Pipeline Practice">
+  <link rel="stylesheet" href="../../static/style.css">
+  <link rel="stylesheet" href="../../static/code.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../">Pipeline Practice</a>
+      <nav>
+        <a href="../../problems/">Problems</a>
+        <a href="../../#signup">Get updates</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+<article class="problem">
+  <p class="breadcrumb"><a href="../">Problems</a></p>
+  <h1>Convert each transaction with the rate valid at the time</h1>
+  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p>
+
+  <p>
+    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/010-asof-exchange-rate-join.ipynb" target="_blank" rel="noopener">Open in Colab</a>
+  </p>
+  <p class="note">
+    The notebook has the data, an answer cell and a <code>check()</code> function.
+    You need a Google account; nothing is installed on your machine.
+  </p>
+
+<h2>The situation</h2>
+<p>Finance reports all transactions in INR. Exchange rates are published at irregular
+times, sometimes several times a day, and each rate applies from the moment it is
+published until the next one for that currency.</p>
+<p>Every transaction must be converted with the rate that was in force when it
+happened, not today's rate and not a daily average.</p>
+<h2>Input tables</h2>
+<h3><code>transactions</code></h3>
+<p>One row per transaction.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>txn_id</code></td>
+<td>BIGINT</td>
+<td>Unique.</td>
+</tr>
+<tr>
+<td><code>currency</code></td>
+<td>STRING</td>
+<td>Currency code of the transaction, for example <code>USD</code> or <code>INR</code>.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Amount in that currency.</td>
+</tr>
+<tr>
+<td><code>txn_time</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the transaction happened.</td>
+</tr>
+</tbody>
+</table>
+<h3><code>exchange_rates</code></h3>
+<p>One row per published rate. Some rows were delivered twice and are identical in
+every column. <code>exchange_rates</code> has no rows for INR.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>currency</code></td>
+<td>STRING</td>
+<td>The foreign currency.</td>
+</tr>
+<tr>
+<td><code>rate_to_inr</code></td>
+<td>DECIMAL(10,4)</td>
+<td>INR for one unit of the currency.</td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>The rate applies from this moment until the currency's next rate.</td>
+</tr>
+</tbody>
+</table>
+<h2>Requirement</h2>
+<p>Return every transaction exactly once, with the rate used and the amount in INR.</p>
+<ul>
+<li>Use the rate of the transaction's currency with the latest <code>valid_from</code> that is
+  <strong>at or before</strong> <code>txn_time</code>. A rate published at the exact moment of the transaction
+  applies to it.</li>
+<li>INR transactions use a rate of 1.</li>
+<li>If no rate for the currency had been published by <code>txn_time</code>, the transaction
+  still appears, with <code>rate_to_inr</code> and <code>amount_inr</code> both NULL.</li>
+<li><code>amount_inr</code> is <code>amount</code> times the rate, rounded to 2 decimals (half up, which is
+  what Spark's <code>round</code> does).</li>
+</ul>
+<h2>Expected output</h2>
+<p>One row per transaction.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>txn_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>currency</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>The original amount.</td>
+</tr>
+<tr>
+<td><code>rate_to_inr</code></td>
+<td>DECIMAL(10,4)</td>
+<td>The rate used. 1.0000 for INR. NULL if no rate was known.</td>
+</tr>
+<tr>
+<td><code>amount_inr</code></td>
+<td>DECIMAL(16,2)</td>
+<td>NULL if no rate was known.</td>
+</tr>
+</tbody>
+</table>
+
+  <h2>Explanation</h2>
+<details class="explanation"><summary>Show explanation</summary>
+<h2>The approach</h2>
+<p>This is an as-of join, also called a point-in-time join: for each row on the left,
+find the latest row on the right that is not in the future. Spark has no built-in
+as-of join for DataFrames, so it is built from a range join and a window.</p>
+<p><strong>1. Join each transaction to every rate that was already valid.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">already_valid</span> <span class="o">=</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;rate_currency&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;currency&quot;</span><span class="p">))</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;valid_from&quot;</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;txn_time&quot;</span><span class="p">))</span>
+<span class="n">matched</span> <span class="o">=</span> <span class="n">txns</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rates</span><span class="p">,</span> <span class="n">already_valid</span><span class="p">,</span> <span class="s2">&quot;left&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>A transaction now has one row per earlier rate of its currency. On this data that is
+1,387 rows for 160 transactions. It has to be a left join: a transaction with no
+earlier rate must survive, with NULLs on the rate side.</p>
+<p><strong>2. Keep the most recent of those rates.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">latest_first</span> <span class="o">=</span> <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;txn_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;valid_from&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">desc</span><span class="p">())</span>
+<span class="n">latest</span> <span class="o">=</span> <span class="n">matched</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;rn&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">latest_first</span><span class="p">))</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;rn&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>row_number</code> returns exactly one row per transaction. That also takes care of rate
+rows that were delivered twice: both copies are identical, one of them wins.</p>
+<p><strong>3. Handle INR and compute the amount.</strong> INR has no rows in <code>exchange_rates</code>, so after
+the left join its rate is NULL. Replace it with 1 before multiplying.</p>
+<p>On large tables the range join is the expensive part, since Spark cannot use a plain
+hash join on an inequality. The usual alternative is to turn each rate into an
+interval with <code>lead(valid_from)</code> (valid from, valid until) and join on
+<code>valid_from &lt;= txn_time &lt; valid_until</code>, or to union both tables and carry the last
+rate forward with <code>last(..., ignorenulls=True)</code> over a window. All three give the same
+result; the union-and-window version avoids the range join entirely.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Inner join.</strong> Returns 129 rows instead of 160. It drops the 13 SGD transactions made
+before the first SGD rate, the 3 JPY transactions (no rates at all) and all 15 INR
+transactions. Totals computed from this are short without any error.</p>
+<p><strong>Skipping the <code>row_number</code> step.</strong> Returns 1,387 rows. Every transaction is repeated
+once per earlier rate. Summing <code>amount_inr</code> on this is wrong by an order of magnitude.</p>
+<p><strong>Joining on the calendar date.</strong> Returns 310 rows. Rates change several times a day,
+so a transaction matches every rate published that day, including ones published
+after it. And a transaction on a day with no new rate gets nothing at all.</p>
+<p><strong>Using each currency's latest rate.</strong> Row count is right, values are wrong. This
+revalues history every time a new rate is published: last month's report changes when
+you rerun it.</p>
+<p><strong><code>valid_from &lt; txn_time</code>.</strong> Row count is right, values are wrong for the four
+transactions made at the exact moment a rate was published. They get the previous
+rate. The rule says "at or before".</p>
+<p><strong>Sorting ascending.</strong> Picks the earliest rate that was valid, which is the first rate
+ever published for the currency.</p>
+<p><strong>Forgetting INR.</strong> Row count is right; the 15 INR transactions have a NULL rate and
+amount instead of 1.0000 and the original amount.</p>
+<h2>Edge cases in the data</h2>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transactions before the currency's first rate</td>
+<td>13 SGD transactions</td>
+<td>Inner join; filling in a later rate.</td>
+</tr>
+<tr>
+<td>Currency with no rates at all</td>
+<td>3 JPY transactions</td>
+<td>Inner join.</td>
+</tr>
+<tr>
+<td>Base currency not in the rates table</td>
+<td>15 INR transactions</td>
+<td>Missing the rate of 1.</td>
+</tr>
+<tr>
+<td>Transaction at the exact <code>valid_from</code> of a rate</td>
+<td>4 transactions</td>
+<td><code>&lt;</code> instead of <code>&lt;=</code>.</td>
+</tr>
+<tr>
+<td>Several rates per currency per day</td>
+<td>all currencies</td>
+<td>Joining on the date.</td>
+</tr>
+<tr>
+<td>Rate rows delivered twice</td>
+<td>3 rows</td>
+<td>Duplicated output rows in interval-based solutions.</td>
+</tr>
+</tbody>
+</table>
+</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Pipeline Practice. All datasets are synthetic. Problems run in Google Colab.</p>
+    </div>
+  </footer>
+</body>
+</html>
