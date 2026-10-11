@@ -31,7 +31,7 @@
       var badge = document.createElement("span");
       badge.className = "badge solved";
       badge.textContent = "✓ Solved";
-      card.querySelector(".badges").prepend(badge);
+      card.querySelector(".badges").append(badge);
     }
   });
 
@@ -41,7 +41,8 @@
     var slug = button.dataset.slug;
     var render = function () {
       var done = solved.indexOf(slug) !== -1;
-      button.textContent = done ? "✓ Solved (click to undo)" : "Mark as solved";
+      button.textContent = done ? "✓ Solved" : "Mark as solved";
+      button.title = done ? "Click to mark this problem as not solved" : "";
       button.classList.toggle("is-solved", done);
       button.setAttribute("aria-pressed", done ? "true" : "false");
     };

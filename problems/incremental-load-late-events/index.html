@@ -15,39 +15,66 @@
   <meta property="og:site_name" content="NullTrap">
   <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css?v=966e797c97">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=0c508caeaf">
   <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
-  <script defer src="../../static/progress.js?v=1624223a38"></script>
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
-      <nav>
-        <a href="../../problems/">Problems</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
         <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
       </nav>
     </div>
   </header>
-  <main class="wrap">
-<article class="problem">
-  <p class="breadcrumb"><a href="../">Problems</a></p>
-  <h1>3. The incremental load that loses late events</h1>
-  <p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Late-data trap</span><span class="badge trap">Boundary trap</span><span class="badge">incremental load</span><span class="badge">late-arriving data</span><span class="badge">watermark</span></p>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 3</span>
+    </nav>
+    <h1>3. The incremental load that loses late events</h1>
+    <p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Late-data trap</span><span class="badge trap">Boundary trap</span></p>
+    <p class="tags">incremental load &middot; late-arriving data &middot; watermark</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/003-incremental-load-late-events.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="incremental-load-late-events" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
 
-  <p class="problem-actions">
-    <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/003-incremental-load-late-events.ipynb" target="_blank" rel="noopener">Open in Colab</a>
-    <button class="button secondary" id="mark-solved" type="button" data-slug="incremental-load-late-events" hidden>Mark as solved</button>
-  </p>
-  <p class="note">
-    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
-    You need a Google account; nothing is installed on your machine. Free Colab runs
-    only two or three notebooks at a time, so end the session of a finished problem
-    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
-    "Mark as solved" is remembered in this browser only.
-  </p>
-
-<h2>The situation</h2>
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
 <p>A nightly job copies new rows from an event feed into the warehouse. To pick up only
 new rows, it filters on <code>event_time &gt; time of the previous run</code>.</p>
 <p>Some events reach the feed hours or days after they happened. By then a later run has
@@ -55,11 +82,11 @@ already moved past their <code>event_time</code>, so they are never loaded. The 
 missing events and nobody gets an error.</p>
 <p>You are rebuilding the load logic. For every run in the history, work out which
 events that run should have loaded.</p>
-<h2>Input tables</h2>
-<h3><code>events</code></h3>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="events"><code>events</code></h3>
 <p>One row per delivery of an event to the feed. An event is normally delivered once,
 but the feed sometimes delivers the same event again later.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -94,10 +121,10 @@ but the feed sometimes delivers the same event again later.</p>
 <td>When this delivery arrived in the feed. Always later than <code>event_time</code>.</td>
 </tr>
 </tbody>
-</table>
-<h3><code>load_runs</code></h3>
+</table></div>
+<h3 id="load_runs"><code>load_runs</code></h3>
 <p>One row per run of the load job.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -117,8 +144,8 @@ but the feed sometimes delivers the same event again later.</p>
 <td>The cutoff of the run. The run can see everything that had arrived by this time.</td>
 </tr>
 </tbody>
-</table>
-<h2>Requirement</h2>
+</table></div>
+<h2 id="requirement">Requirement</h2>
 <ul>
 <li>A run loads the events that arrived after the previous run's <code>run_time</code> and up to
   and including its own <code>run_time</code>. The first run loads everything that had arrived
@@ -129,9 +156,9 @@ but the feed sometimes delivers the same event again later.</p>
 <li>Events that arrived after the last run are not loaded yet and are not in the result.</li>
 <li>A run with nothing to load has no rows in the result.</li>
 </ul>
-<h2>Expected output</h2>
+<h2 id="expected-output">Expected output</h2>
 <p>One row per loaded event.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -151,11 +178,15 @@ but the feed sometimes delivers the same event again later.</p>
 <td>The run that loads the event.</td>
 </tr>
 </tbody>
-</table>
+</table></div>
+    </div>
 
 
-  <h2>Explanation</h2>
-<details class="explanation"><summary>Show explanation</summary>
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
 <h2>The approach</h2>
 <p>An incremental load has to answer one question per run: "what is new since last
 time?" New means "arrived since last time", so the filter belongs on the arrival
@@ -204,7 +235,7 @@ the lower, the row count is still 162, but the three events that arrived exactly
 <code>run_time</code> move to the following run. With <code>&gt;=</code> and <code>&lt;=</code> together (or <code>BETWEEN</code>),
 those three events are loaded by two runs each, giving 165 rows.</p>
 <h2>Edge cases in the data</h2>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Case</th>
@@ -244,14 +275,57 @@ those three events are loaded by two runs each, giving 165 rows.</p>
 <td>A lower bound of NULL that silently matches nothing.</td>
 </tr>
 </tbody>
-</table>
-</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
-</article>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../latest-record-per-customer/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">2. Keep the latest record per customer</span></a>
+      <a class="pager-link next" href="../scd2-history-from-saves/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">4. Build SCD2 history from repeated saves</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
 
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
     </div>
   </footer>
 </body>

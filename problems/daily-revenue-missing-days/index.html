@@ -15,49 +15,76 @@
   <meta property="og:site_name" content="NullTrap">
   <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../../static/style.css?v=966e797c97">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=0c508caeaf">
   <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
-  <script defer src="../../static/progress.js?v=1624223a38"></script>
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
-      <nav>
-        <a href="../../problems/">Problems</a>
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
         <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
       </nav>
     </div>
   </header>
-  <main class="wrap">
-<article class="problem">
-  <p class="breadcrumb"><a href="../">Problems</a></p>
-  <h1>15. Daily revenue with the missing days filled in</h1>
-  <p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">date spine</span><span class="badge">calendar table</span><span class="badge">cross join</span><span class="badge">left join</span><span class="badge">gaps</span></p>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 15</span>
+    </nav>
+    <h1>15. Daily revenue with the missing days filled in</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span></p>
+    <p class="tags">date spine &middot; calendar table &middot; cross join &middot; left join &middot; gaps</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/015-daily-revenue-missing-days.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="daily-revenue-missing-days" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
 
-  <p class="problem-actions">
-    <a class="button" href="#editor">Solve in the browser</a>
-    <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/015-daily-revenue-missing-days.ipynb" target="_blank" rel="noopener">Open in Colab</a>
-    <button class="button secondary" id="mark-solved" type="button" data-slug="daily-revenue-missing-days" hidden>Mark as solved</button>
-  </p>
-  <p class="note">
-    The Colab notebook has the data, an answer cell and a <code>check()</code> function.
-    You need a Google account; nothing is installed on your machine. Free Colab runs
-    only two or three notebooks at a time, so end the session of a finished problem
-    (Runtime &gt; Disconnect and delete runtime) before opening the next one.
-    "Mark as solved" is remembered in this browser only.
-  </p>
-
-<h2>The situation</h2>
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
 <p>A dashboard draws daily revenue per store as a line chart. The chart library connects
 the points it is given. When a store has no sales on a day, there is no point for that
 day, and the line runs straight from the day before to the day after. A closed store
 looks like a normal day.</p>
 <p>The chart needs a row for every store and every day, with 0 where nothing was sold.</p>
-<h2>Input tables</h2>
-<h3><code>stores</code></h3>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="stores"><code>stores</code></h3>
 <p>One row per store.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -77,10 +104,10 @@ looks like a normal day.</p>
 <td>Display name.</td>
 </tr>
 </tbody>
-</table>
-<h3><code>calendar</code></h3>
+</table></div>
+<h3 id="calendar"><code>calendar</code></h3>
 <p>One row per calendar day, from 1 January 2025 to 30 June 2025.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -100,10 +127,10 @@ looks like a normal day.</p>
 <td>True on Saturdays and Sundays.</td>
 </tr>
 </tbody>
-</table>
-<h3><code>sales</code></h3>
+</table></div>
+<h3 id="sales"><code>sales</code></h3>
 <p>One row per sale. A store can have several sales on a day, or none.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -133,8 +160,8 @@ looks like a normal day.</p>
 <td>Sale value in rupees.</td>
 </tr>
 </tbody>
-</table>
-<h2>Requirement</h2>
+</table></div>
+<h2 id="requirement">Requirement</h2>
 <p>Return daily revenue for March 2025.</p>
 <ul>
 <li>One row for every store in <code>stores</code> and every day from 1 March 2025 to
@@ -143,9 +170,9 @@ looks like a normal day.</p>
 <li>A store with no sales in March at all still gets its 31 rows.</li>
 <li>Sales outside March do not appear.</li>
 </ul>
-<h2>Expected output</h2>
+<h2 id="expected-output">Expected output</h2>
 <p>One row per store per day of March.</p>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Column</th>
@@ -170,30 +197,48 @@ looks like a normal day.</p>
 <td>0.00 on days without sales.</td>
 </tr>
 </tbody>
-</table>
+</table></div>
+    </div>
 
 <section id="editor" class="editor">
-  <h2>Solve it in the browser</h2>
-  <p class="note">
-    This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
-    to a server. DuckDB's SQL is close to Spark SQL but not identical. 
-    The Colab notebook runs real Spark.
-  </p>
-  <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
-  <p class="editor-actions">
-    <button class="button secondary" id="editor-run" type="button">Run</button>
-    <button class="button" id="editor-check" type="button">Run and check</button>
-    <span id="editor-status" class="note" aria-live="polite"></span>
-  </p>
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
   <div id="editor-message" class="editor-message" role="status" hidden></div>
-  <div id="editor-result" class="editor-result"></div>
-  <p class="note">Ctrl+Enter runs the query. Your draft is kept in this browser.</p>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
   <script type="application/json" id="editor-config">{"slug": "daily-revenue-missing-days", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "calendar", "url": "../../data/015-daily-revenue-missing-days/calendar.parquet"}, {"name": "sales", "url": "../../data/015-daily-revenue-missing-days/sales.parquet"}, {"name": "stores", "url": "../../data/015-daily-revenue-missing-days/stores.parquet"}], "starter": "-- Tables: calendar, sales, stores\nSELECT *\nFROM calendar\nLIMIT 10", "expected": {"columns": ["revenue", "sale_date", "store_id"], "row_count": 186, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"sale_date\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "516e172ad0751bdf979505345c21a4dc1b4db7175e5a186a96e8652d19cebd96", "column_checks": [{"name": "revenue", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"revenue\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "eb05dd962db0a4e68d0f7220d728b020322d855e979fb73bca06818063e14fca"}, {"name": "sale_date", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"sale_date\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "9d8dfd577ab02d0bf778dd00e736528e7663359fc0d4c72fafa667c6da34be4d"}, {"name": "store_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "3394c429df41f9d31f964439ab6e958def996cb76749704722d8b023c108ed76"}]}}</script>
-  <script type="module" src="../../static/editor.js?v=91ec081e9c"></script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
 </section>
 
-  <h2>Explanation</h2>
-<details class="explanation"><summary>Show explanation</summary>
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
 <h2>The approach</h2>
 <p><code>GROUP BY store_id, sale_date</code> produces one row for every combination that exists in
 <code>sales</code>. A day without sales has no rows, so there is nothing to group and nothing to
@@ -243,7 +288,7 @@ tables anyone builds. Without one, Spark can generate the days:</p>
 </code></pre></div>
 
 <h2>Edge cases in the data</h2>
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Case</th>
@@ -283,14 +328,58 @@ tables anyone builds. Without one, Spark can generate the days:</p>
 <td>Forgetting to restrict the spine.</td>
 </tr>
 </tbody>
-</table>
-</details><p class="note">Try the problem first. The explanation gives the answer away.</p>
-</article>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../utc-dates-in-india-report/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">14. The daily report that is five and a half hours off</span></a>
+      <a class="pager-link next" href="../month-over-month-gaps/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">16. Month-over-month change when a month is missing</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
 
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
     </div>
   </footer>
 </body>

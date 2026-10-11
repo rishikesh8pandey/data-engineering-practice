@@ -4,139 +4,199 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SQL and PySpark data engineering problems | NullTrap</title>
-  <meta name="description" content="All practice problems. Filter by track (SQL, PySpark, Debug the AI) and by difficulty.">
+  <meta name="description" content="All practice problems. Filter by trap, by track (SQL, PySpark, Debug the AI) and by difficulty.">
   <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/">
   <link rel="icon" href="../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../static/favicon.png?v=7631231761">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SQL and PySpark data engineering problems | NullTrap">
-  <meta property="og:description" content="All practice problems. Filter by track (SQL, PySpark, Debug the AI) and by difficulty.">
+  <meta property="og:description" content="All practice problems. Filter by trap, by track (SQL, PySpark, Debug the AI) and by difficulty.">
   <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/">
   <meta property="og:site_name" content="NullTrap">
   <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="../static/style.css?v=966e797c97">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../static/style.css?v=0c508caeaf">
   <link rel="stylesheet" href="../static/code.css?v=4a7388524f">
-  <script defer src="../static/progress.js?v=1624223a38"></script>
+  <script defer src="../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../static/site.js?v=28a35c4fbb"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../static/favicon.svg?v=fc2ea56d66" alt="" width="24" height="24">NullTrap</a>
-      <nav>
-        <a href="../problems/">Problems</a>
+      <a class="brand" href="../"><img src="../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../problems/" aria-current="page">Problems</a>
         <a href="../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
       </nav>
     </div>
   </header>
-  <main class="wrap">
-<h1>Problems</h1>
-
-<section class="progress-strip" aria-label="Your progress">
-  <div class="progress-head">
-    <strong id="solved-count">0 of 0 solved</strong>
-    <span class="note">One block per problem. Progress is saved in this browser.</span>
-  </div>
-  <div class="pipeline" id="pipeline">
-    <a class="segment" href="orders-payments-join/" data-slug="orders-payments-join" title="1. Revenue per customer is higher than the ledger" aria-label="1. Revenue per customer is higher than the ledger"></a>
-    <a class="segment" href="latest-record-per-customer/" data-slug="latest-record-per-customer" title="2. Keep the latest record per customer" aria-label="2. Keep the latest record per customer"></a>
-    <a class="segment" href="incremental-load-late-events/" data-slug="incremental-load-late-events" title="3. The incremental load that loses late events" aria-label="3. The incremental load that loses late events"></a>
-    <a class="segment" href="scd2-history-from-saves/" data-slug="scd2-history-from-saves" title="4. Build SCD2 history from repeated saves" aria-label="4. Build SCD2 history from repeated saves"></a>
-    <a class="segment" href="running-balance-tied-dates/" data-slug="running-balance-tied-dates" title="5. The running balance that jumps ahead" aria-label="5. The running balance that jumps ahead"></a>
-    <a class="segment" href="data-quality-report/" data-slug="data-quality-report" title="6. A data quality report that counts NULLs correctly" aria-label="6. A data quality report that counts NULLs correctly"></a>
-    <a class="segment" href="sessionize-page-views/" data-slug="sessionize-page-views" title="7. Sessionize page views with a 30-minute gap" aria-label="7. Sessionize page views with a 30-minute gap"></a>
-    <a class="segment" href="union-swapped-columns/" data-slug="union-swapped-columns" title="8. The union that swaps two columns" aria-label="8. The union that swaps two columns"></a>
-    <a class="segment" href="merge-overlapping-periods/" data-slug="merge-overlapping-periods" title="9. Merge overlapping coverage periods" aria-label="9. Merge overlapping coverage periods"></a>
-    <a class="segment" href="asof-exchange-rate-join/" data-slug="asof-exchange-rate-join" title="10. Convert each transaction with the rate valid at the time" aria-label="10. Convert each transaction with the rate valid at the time"></a>
-    <a class="segment" href="top-products-with-ties/" data-slug="top-products-with-ties" title="11. Top three products per category, ties included" aria-label="11. Top three products per category, ties included"></a>
-    <a class="segment" href="average-rating-nulls/" data-slug="average-rating-nulls" title="12. The average rating where NULL is not zero" aria-label="12. The average rating where NULL is not zero"></a>
-    <a class="segment" href="left-join-where-filter/" data-slug="left-join-where-filter" title="13. The LEFT JOIN that a WHERE clause quietly undoes" aria-label="13. The LEFT JOIN that a WHERE clause quietly undoes"></a>
-    <a class="segment" href="utc-dates-in-india-report/" data-slug="utc-dates-in-india-report" title="14. The daily report that is five and a half hours off" aria-label="14. The daily report that is five and a half hours off"></a>
-    <a class="segment" href="daily-revenue-missing-days/" data-slug="daily-revenue-missing-days" title="15. Daily revenue with the missing days filled in" aria-label="15. Daily revenue with the missing days filled in"></a>
-    <a class="segment" href="month-over-month-gaps/" data-slug="month-over-month-gaps" title="16. Month-over-month change when a month is missing" aria-label="16. Month-over-month change when a month is missing"></a>
-    <a class="segment" href="explode-double-count/" data-slug="explode-double-count" title="17. Order totals that grow after explode" aria-label="17. Order totals that grow after explode"></a>
-    <a class="segment" href="join-on-nullable-key/" data-slug="join-on-nullable-key" title="18. The regions that sold nothing, according to the join" aria-label="18. The regions that sold nothing, according to the join"></a>
-    <a class="segment" href="scd2-point-in-time-lookup/" data-slug="scd2-point-in-time-lookup" title="19. Which tier was the customer in when they ordered?" aria-label="19. Which tier was the customer in when they ordered?"></a>
-    <a class="segment" href="apply-changes-to-scd2/" data-slug="apply-changes-to-scd2" title="20. Apply a batch of changes to an SCD2 table" aria-label="20. Apply a batch of changes to an SCD2 table"></a>
-  </div>
-</section>
-
-<form id="filters" class="problem-controls">
-  <input type="hidden" name="trap" value="">
-  <input type="hidden" name="track" value="">
-  <input type="hidden" name="difficulty" value="">
-
-  <h2 class="section-label">Pick a trap</h2>
-  <div class="trap-grid">
-    <button type="button" class="trap-tile" data-trap="null"><span class="trap-name">NULL trap</span><span class="trap-note">A comparison with NULL is never true, and never false either.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="fan-out"><span class="trap-name">Fan-out trap</span><span class="trap-note">A join or an explode repeats rows, and the sums grow.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="tie"><span class="trap-name">Tie trap</span><span class="trap-note">Two rows sort as equal, and which one wins is left to chance.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="boundary"><span class="trap-name">Boundary trap</span><span class="trap-note">The first day, the last second, the exact cut-off.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="duplicate"><span class="trap-name">Duplicate trap</span><span class="trap-note">The same row arrives twice.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="late-data"><span class="trap-name">Late-data trap</span><span class="trap-note">Data that turns up after you stopped looking for it.</span><span class="trap-progress"></span></button>
-    <button type="button" class="trap-tile" data-trap="schema"><span class="trap-name">Schema trap</span><span class="trap-note">Columns that are not what their position suggests.</span><span class="trap-progress"></span></button>
-  </div>
-
-  <div class="control-row">
-    <div class="track-switch" role="group" aria-label="Track">
-      <button type="button" data-track="">All tracks</button>
-      <button type="button" class="track-sql" data-track="sql">SQL <span class="tab-count">10</span></button>
-      <button type="button" class="track-pyspark" data-track="pyspark">PySpark <span class="tab-count">5</span></button>
-      <button type="button" class="track-debug-the-ai" data-track="debug-the-ai">Debug the AI <span class="tab-count">5</span></button>
+  <main id="main">
+<header class="page-head">
+  <div class="wrap page-head-grid">
+    <div>
+      <h1>Problems</h1>
+      <p class="lead">20 problems across three tracks. Filter by the trap you want to practise, or search.</p>
     </div>
-    <div class="difficulty-switch" role="group" aria-label="Difficulty">
-      <button type="button" class="easy" data-difficulty="easy">Easy</button>
-      <button type="button" class="medium" data-difficulty="medium">Medium</button>
-      <button type="button" class="hard" data-difficulty="hard">Hard</button>
+    <section class="progress-panel" aria-label="Your progress">
+      <div class="progress-head">
+        <strong id="solved-count">0 of 20 solved</strong>
+        <span>Saved in this browser</span>
+      </div>
+      <div class="pipeline" id="pipeline">
+        <a class="segment" href="orders-payments-join/" data-slug="orders-payments-join" title="1. Revenue per customer is higher than the ledger" aria-label="1. Revenue per customer is higher than the ledger"></a>
+        <a class="segment" href="latest-record-per-customer/" data-slug="latest-record-per-customer" title="2. Keep the latest record per customer" aria-label="2. Keep the latest record per customer"></a>
+        <a class="segment" href="incremental-load-late-events/" data-slug="incremental-load-late-events" title="3. The incremental load that loses late events" aria-label="3. The incremental load that loses late events"></a>
+        <a class="segment" href="scd2-history-from-saves/" data-slug="scd2-history-from-saves" title="4. Build SCD2 history from repeated saves" aria-label="4. Build SCD2 history from repeated saves"></a>
+        <a class="segment" href="running-balance-tied-dates/" data-slug="running-balance-tied-dates" title="5. The running balance that jumps ahead" aria-label="5. The running balance that jumps ahead"></a>
+        <a class="segment" href="data-quality-report/" data-slug="data-quality-report" title="6. A data quality report that counts NULLs correctly" aria-label="6. A data quality report that counts NULLs correctly"></a>
+        <a class="segment" href="sessionize-page-views/" data-slug="sessionize-page-views" title="7. Sessionize page views with a 30-minute gap" aria-label="7. Sessionize page views with a 30-minute gap"></a>
+        <a class="segment" href="union-swapped-columns/" data-slug="union-swapped-columns" title="8. The union that swaps two columns" aria-label="8. The union that swaps two columns"></a>
+        <a class="segment" href="merge-overlapping-periods/" data-slug="merge-overlapping-periods" title="9. Merge overlapping coverage periods" aria-label="9. Merge overlapping coverage periods"></a>
+        <a class="segment" href="asof-exchange-rate-join/" data-slug="asof-exchange-rate-join" title="10. Convert each transaction with the rate valid at the time" aria-label="10. Convert each transaction with the rate valid at the time"></a>
+        <a class="segment" href="top-products-with-ties/" data-slug="top-products-with-ties" title="11. Top three products per category, ties included" aria-label="11. Top three products per category, ties included"></a>
+        <a class="segment" href="average-rating-nulls/" data-slug="average-rating-nulls" title="12. The average rating where NULL is not zero" aria-label="12. The average rating where NULL is not zero"></a>
+        <a class="segment" href="left-join-where-filter/" data-slug="left-join-where-filter" title="13. The LEFT JOIN that a WHERE clause quietly undoes" aria-label="13. The LEFT JOIN that a WHERE clause quietly undoes"></a>
+        <a class="segment" href="utc-dates-in-india-report/" data-slug="utc-dates-in-india-report" title="14. The daily report that is five and a half hours off" aria-label="14. The daily report that is five and a half hours off"></a>
+        <a class="segment" href="daily-revenue-missing-days/" data-slug="daily-revenue-missing-days" title="15. Daily revenue with the missing days filled in" aria-label="15. Daily revenue with the missing days filled in"></a>
+        <a class="segment" href="month-over-month-gaps/" data-slug="month-over-month-gaps" title="16. Month-over-month change when a month is missing" aria-label="16. Month-over-month change when a month is missing"></a>
+        <a class="segment" href="explode-double-count/" data-slug="explode-double-count" title="17. Order totals that grow after explode" aria-label="17. Order totals that grow after explode"></a>
+        <a class="segment" href="join-on-nullable-key/" data-slug="join-on-nullable-key" title="18. The regions that sold nothing, according to the join" aria-label="18. The regions that sold nothing, according to the join"></a>
+        <a class="segment" href="scd2-point-in-time-lookup/" data-slug="scd2-point-in-time-lookup" title="19. Which tier was the customer in when they ordered?" aria-label="19. Which tier was the customer in when they ordered?"></a>
+        <a class="segment" href="apply-changes-to-scd2/" data-slug="apply-changes-to-scd2" title="20. Apply a batch of changes to an SCD2 table" aria-label="20. Apply a batch of changes to an SCD2 table"></a>
+      </div>
+    </section>
+  </div>
+</header>
+
+<div class="wrap list-body">
+  <form id="filters" class="problem-controls">
+    <input type="hidden" name="trap" value="">
+    <input type="hidden" name="track" value="">
+    <input type="hidden" name="difficulty" value="">
+
+    <h2 class="overline" id="traps-title">Pick a trap</h2>
+    <div class="trap-grid" role="group" aria-labelledby="traps-title">
+      <button type="button" class="trap-tile" data-trap="null"><span class="trap-head"><span class="trap-name">NULL trap</span><span class="trap-progress"></span></span><span class="trap-note">A comparison with NULL is never true, and never false either.</span></button>
+      <button type="button" class="trap-tile" data-trap="fan-out"><span class="trap-head"><span class="trap-name">Fan-out trap</span><span class="trap-progress"></span></span><span class="trap-note">A join or an explode repeats rows, and the sums grow.</span></button>
+      <button type="button" class="trap-tile" data-trap="tie"><span class="trap-head"><span class="trap-name">Tie trap</span><span class="trap-progress"></span></span><span class="trap-note">Two rows sort as equal, and which one wins is left to chance.</span></button>
+      <button type="button" class="trap-tile" data-trap="boundary"><span class="trap-head"><span class="trap-name">Boundary trap</span><span class="trap-progress"></span></span><span class="trap-note">The first day, the last second, the exact cut-off.</span></button>
+      <button type="button" class="trap-tile" data-trap="duplicate"><span class="trap-head"><span class="trap-name">Duplicate trap</span><span class="trap-progress"></span></span><span class="trap-note">The same row arrives twice.</span></button>
+      <button type="button" class="trap-tile" data-trap="late-data"><span class="trap-head"><span class="trap-name">Late-data trap</span><span class="trap-progress"></span></span><span class="trap-note">Data that turns up after you stopped looking for it.</span></button>
+      <button type="button" class="trap-tile" data-trap="schema"><span class="trap-head"><span class="trap-name">Schema trap</span><span class="trap-progress"></span></span><span class="trap-note">Columns that are not what their position suggests.</span></button>
     </div>
+
+    <div class="toolbar">
+      <div class="toolbar-row">
+        <div class="segmented track-switch" role="group" aria-label="Track">
+          <button type="button" data-track="">All tracks</button>
+        <button type="button" class="track-sql" data-track="sql">SQL <span class="tab-count">10</span></button>
+        <button type="button" class="track-pyspark" data-track="pyspark">PySpark <span class="tab-count">5</span></button>
+        <button type="button" class="track-debug-the-ai" data-track="debug-the-ai">Debug the AI <span class="tab-count">5</span></button>
+        </div>
+        <div class="difficulty-switch" role="group" aria-label="Difficulty">
+          <button type="button" class="easy" data-difficulty="easy">Easy</button>
+          <button type="button" class="medium" data-difficulty="medium">Medium</button>
+          <button type="button" class="hard" data-difficulty="hard">Hard</button>
+        </div>
+      </div>
+      <div class="toolbar-row">
+        <label class="search-field">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input type="search" name="q" class="input" placeholder="Search by title, tag or description" aria-label="Search problems" autocomplete="off">
+        </label>
+        <label class="sort-control"><span>Sort</span>
+          <select name="sort" class="select">
+            <option value="">Number</option>
+            <option value="difficulty">Difficulty</option>
+            <option value="title">Title</option>
+          </select>
+        </label>
+        <label class="check-control"><input type="checkbox" name="status" value="unsolved"> Hide solved</label>
+        <button type="button" class="button secondary" id="random-problem" title="Open a random problem from the ones shown">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3c4 0 6 10 10 10h5M21 17l-3-3M21 17l-3 3M3 17h3c1.2 0 2.2-.9 3.2-2.2M21 7h-5c-1.2 0-2.2.9-3.2 2.2M21 7l-3-3M21 7l-3 3"/></svg>
+          Surprise me
+        </button>
+      </div>
+    </div>
+
+    <p class="filter-count" id="filter-count" aria-live="polite"></p>
+  </form>
+
+  <div class="problem-list" id="problem-list">
+<article class="problem-card track-debug-the-ai" data-slug="orders-payments-join" data-number="1" data-title="Revenue per customer is higher than the ledger" data-track="debug-the-ai" data-difficulty="easy" data-trap="fan-out"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span></p><h3><a href="../problems/orders-payments-join/">1. Revenue per customer is higher than the ledger</a></h3><p class="card-desc">An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.</p><p class="card-foot"><span class="badge trap">Fan-out trap</span><span class="tags">joins &middot; row duplication &middot; aggregation</span></p></article>
+<article class="problem-card track-sql" data-slug="latest-record-per-customer" data-number="2" data-title="Keep the latest record per customer" data-track="sql" data-difficulty="easy" data-trap="tie null"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span></p><h3><a href="../problems/latest-record-per-customer/">2. Keep the latest record per customer</a></h3><p class="card-desc">A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.</p><p class="card-foot"><span class="badge trap">Tie trap</span><span class="badge trap">NULL trap</span><span class="tags">deduplication &middot; window functions &middot; nulls</span></p></article>
+<article class="problem-card track-pyspark" data-slug="incremental-load-late-events" data-number="3" data-title="The incremental load that loses late events" data-track="pyspark" data-difficulty="medium" data-trap="late-data boundary"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge medium">Medium</span></p><h3><a href="../problems/incremental-load-late-events/">3. The incremental load that loses late events</a></h3><p class="card-desc">A nightly incremental load filters on event time and silently skips events that arrive late. Work out with PySpark which run should load each event, exactly once.</p><p class="card-foot"><span class="badge trap">Late-data trap</span><span class="badge trap">Boundary trap</span><span class="tags">incremental load &middot; late-arriving data &middot; watermark</span></p></article>
+<article class="problem-card track-sql" data-slug="scd2-history-from-saves" data-number="4" data-title="Build SCD2 history from repeated saves" data-track="sql" data-difficulty="medium" data-trap="null"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span></p><h3><a href="../problems/scd2-history-from-saves/">4. Build SCD2 history from repeated saves</a></h3><p class="card-desc">Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="tags">scd2 &middot; slowly changing dimension &middot; window functions &middot; nulls</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="running-balance-tied-dates" data-number="5" data-title="The running balance that jumps ahead" data-track="debug-the-ai" data-difficulty="medium" data-trap="tie"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="../problems/running-balance-tied-dates/">5. The running balance that jumps ahead</a></h3><p class="card-desc">An AI-written Spark SQL window query computes a running account balance, but transactions on the same date all show the end-of-day balance. Find the window frame bug and fix it.</p><p class="card-foot"><span class="badge trap">Tie trap</span><span class="tags">window functions &middot; running total &middot; window frame</span></p></article>
+<article class="problem-card track-sql" data-slug="data-quality-report" data-number="6" data-title="A data quality report that counts NULLs correctly" data-track="sql" data-difficulty="easy" data-trap="null duplicate"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span></p><h3><a href="../problems/data-quality-report/">6. A data quality report that counts NULLs correctly</a></h3><p class="card-desc">Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="badge trap">Duplicate trap</span><span class="tags">data quality &middot; nulls &middot; not in &middot; duplicates</span></p></article>
+<article class="problem-card track-pyspark" data-slug="sessionize-page-views" data-number="7" data-title="Sessionize page views with a 30-minute gap" data-track="pyspark" data-difficulty="medium" data-trap="boundary tie"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge medium">Medium</span></p><h3><a href="../problems/sessionize-page-views/">7. Sessionize page views with a 30-minute gap</a></h3><p class="card-desc">Group raw page views into user sessions with PySpark window functions. A session ends after more than 30 minutes of inactivity. Covers the exact boundary, long sessions and sessions across midnight.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="badge trap">Tie trap</span><span class="tags">sessionization &middot; window functions &middot; lag &middot; gaps and islands</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="union-swapped-columns" data-number="8" data-title="The union that swaps two columns" data-track="debug-the-ai" data-difficulty="easy" data-trap="schema"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span></p><h3><a href="../problems/union-swapped-columns/">8. The union that swaps two columns</a></h3><p class="card-desc">AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p><p class="card-foot"><span class="badge trap">Schema trap</span><span class="tags">union &middot; unionByName &middot; schema &middot; aggregation</span></p></article>
+<article class="problem-card track-sql" data-slug="merge-overlapping-periods" data-number="9" data-title="Merge overlapping coverage periods" data-track="sql" data-difficulty="hard" data-trap="boundary"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge hard">Hard</span></p><h3><a href="../problems/merge-overlapping-periods/">9. Merge overlapping coverage periods</a></h3><p class="card-desc">Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">gaps and islands &middot; date ranges &middot; window functions &middot; running max</span></p></article>
+<article class="problem-card track-pyspark" data-slug="asof-exchange-rate-join" data-number="10" data-title="Convert each transaction with the rate valid at the time" data-track="pyspark" data-difficulty="hard" data-trap="fan-out boundary"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge hard">Hard</span></p><h3><a href="../problems/asof-exchange-rate-join/">10. Convert each transaction with the rate valid at the time</a></h3><p class="card-desc">A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p><p class="card-foot"><span class="badge trap">Fan-out trap</span><span class="badge trap">Boundary trap</span><span class="tags">as-of join &middot; point-in-time join &middot; range join &middot; window functions</span></p></article>
+<article class="problem-card track-sql" data-slug="top-products-with-ties" data-number="11" data-title="Top three products per category, ties included" data-track="sql" data-difficulty="easy" data-trap="tie"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span></p><h3><a href="../problems/top-products-with-ties/">11. Top three products per category, ties included</a></h3><p class="card-desc">Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.</p><p class="card-foot"><span class="badge trap">Tie trap</span><span class="tags">top n per group &middot; rank &middot; dense_rank &middot; row_number &middot; window functions</span></p></article>
+<article class="problem-card track-sql" data-slug="average-rating-nulls" data-number="12" data-title="The average rating where NULL is not zero" data-track="sql" data-difficulty="easy" data-trap="null"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span></p><h3><a href="../problems/average-rating-nulls/">12. The average rating where NULL is not zero</a></h3><p class="card-desc">Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="tags">aggregation &middot; count &middot; avg &middot; nulls &middot; coalesce</span></p></article>
+<article class="problem-card track-sql" data-slug="left-join-where-filter" data-number="13" data-title="The LEFT JOIN that a WHERE clause quietly undoes" data-track="sql" data-difficulty="easy" data-trap="null"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span></p><h3><a href="../problems/left-join-where-filter/">13. The LEFT JOIN that a WHERE clause quietly undoes</a></h3><p class="card-desc">Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="tags">left join &middot; on vs where &middot; count &middot; coalesce</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="utc-dates-in-india-report" data-number="14" data-title="The daily report that is five and a half hours off" data-track="debug-the-ai" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="../problems/utc-dates-in-india-report/">14. The daily report that is five and a half hours off</a></h3><p class="card-desc">AI-written PySpark code builds a daily activity report for India from UTC timestamps. The weekly total is right but every day is wrong. Find the time zone bug and fix it.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">time zones &middot; utc &middot; ist &middot; dates &middot; daily aggregation</span></p></article>
+<article class="problem-card track-sql" data-slug="daily-revenue-missing-days" data-number="15" data-title="Daily revenue with the missing days filled in" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span></p><h3><a href="../problems/daily-revenue-missing-days/">15. Daily revenue with the missing days filled in</a></h3><p class="card-desc">Produce one row per store per day of March with Spark SQL, showing 0 on days without sales. A GROUP BY can only return days that have data; the missing days have to come from a calendar table.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">date spine &middot; calendar table &middot; cross join &middot; left join &middot; gaps</span></p></article>
+<article class="problem-card track-sql" data-slug="month-over-month-gaps" data-number="16" data-title="Month-over-month change when a month is missing" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span></p><h3><a href="../problems/month-over-month-gaps/">16. Month-over-month change when a month is missing</a></h3><p class="card-desc">Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">lag &middot; month over month &middot; window functions &middot; gaps &middot; time series</span></p></article>
+<article class="problem-card track-pyspark" data-slug="explode-double-count" data-number="17" data-title="Order totals that grow after explode" data-track="pyspark" data-difficulty="medium" data-trap="fan-out"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge medium">Medium</span></p><h3><a href="../problems/explode-double-count/">17. Order totals that grow after explode</a></h3><p class="card-desc">Summarise orders that carry a nested array of items with PySpark. After explode() each order is repeated once per item, so order-level values such as shipping fees get counted several times, and orders with no items vanish.</p><p class="card-foot"><span class="badge trap">Fan-out trap</span><span class="tags">explode &middot; arrays &middot; nested data &middot; grain &middot; aggregation</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="join-on-nullable-key" data-number="18" data-title="The regions that sold nothing, according to the join" data-track="debug-the-ai" data-difficulty="medium" data-trap="null"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="../problems/join-on-nullable-key/">18. The regions that sold nothing, according to the join</a></h3><p class="card-desc">AI-written PySpark code compares regional sales with targets by joining on country and state. Regions whose state is NULL show zero sales, because NULL never equals NULL in a join. Find the bug and fix it.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="tags">joins &middot; null keys &middot; eqNullSafe &middot; composite key</span></p></article>
+<article class="problem-card track-sql" data-slug="scd2-point-in-time-lookup" data-number="19" data-title="Which tier was the customer in when they ordered?" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span></p><h3><a href="../problems/scd2-point-in-time-lookup/">19. Which tier was the customer in when they ordered?</a></h3><p class="card-desc">Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">scd2 &middot; slowly changing dimension &middot; point-in-time join &middot; range join &middot; between</span></p></article>
+<article class="problem-card track-pyspark" data-slug="apply-changes-to-scd2" data-number="20" data-title="Apply a batch of changes to an SCD2 table" data-track="pyspark" data-difficulty="hard" data-trap="late-data"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge hard">Hard</span></p><h3><a href="../problems/apply-changes-to-scd2/">20. Apply a batch of changes to an SCD2 table</a></h3><p class="card-desc">Merge a batch of customer changes into a type 2 slowly changing dimension with PySpark. Close old versions, open new ones, skip saves that changed nothing, handle several changes for one customer, and ignore changes that arrive too late.</p><p class="card-foot"><span class="badge trap">Late-data trap</span><span class="tags">scd2 &middot; slowly changing dimension &middot; merge &middot; upsert &middot; late-arriving data</span></p></article>
   </div>
 
-  <div class="control-row">
-    <input type="search" name="q" class="search-input" placeholder="Search by title, tag or description" aria-label="Search problems" autocomplete="off">
-    <label class="sort-control">Sort
-      <select name="sort">
-        <option value="">Number</option>
-        <option value="difficulty">Difficulty</option>
-        <option value="title">Title</option>
-      </select>
-    </label>
-    <label class="check-control"><input type="checkbox" name="status" value="unsolved"> Hide solved</label>
-    <button type="button" class="button secondary" id="random-problem">Surprise me</button>
+  <div class="empty-state" id="no-results" hidden>
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M8.5 11h5"/></svg>
+    <h2>No problems match</h2>
+    <p>Nothing fits this combination of search and filters.</p>
+    <button type="button" class="button secondary" id="clear-filters">Clear search and filters</button>
   </div>
-
-  <p class="filter-count" id="filter-count"></p>
-</form>
-
-<div class="problem-list" id="problem-list">
-<div class="problem-card" data-slug="orders-payments-join" data-number="1" data-title="Revenue per customer is higher than the ledger" data-track="debug-the-ai" data-difficulty="easy" data-trap="fan-out"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge trap">Fan-out trap</span><span class="badge">joins</span><span class="badge">row duplication</span><span class="badge">aggregation</span></p><h3><a href="../problems/orders-payments-join/">1. Revenue per customer is higher than the ledger</a></h3><p>An AI-written PySpark join between orders and payments inflates revenue because some orders have several payment rows. Find the duplicated rows and fix the query.</p></div>
-<div class="problem-card" data-slug="latest-record-per-customer" data-number="2" data-title="Keep the latest record per customer" data-track="sql" data-difficulty="easy" data-trap="tie null"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">Tie trap</span><span class="badge trap">NULL trap</span><span class="badge">deduplication</span><span class="badge">window functions</span><span class="badge">nulls</span></p><h3><a href="../problems/latest-record-per-customer/">2. Keep the latest record per customer</a></h3><p>A change feed delivers several versions of each customer, with repeated rows, tied timestamps and missing timestamps. Write the Spark SQL that keeps exactly one current row per customer.</p></div>
-<div class="problem-card" data-slug="incremental-load-late-events" data-number="3" data-title="The incremental load that loses late events" data-track="pyspark" data-difficulty="medium" data-trap="late-data boundary"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Late-data trap</span><span class="badge trap">Boundary trap</span><span class="badge">incremental load</span><span class="badge">late-arriving data</span><span class="badge">watermark</span></p><h3><a href="../problems/incremental-load-late-events/">3. The incremental load that loses late events</a></h3><p>A nightly incremental load filters on event time and silently skips events that arrive late. Work out with PySpark which run should load each event, exactly once.</p></div>
-<div class="problem-card" data-slug="scd2-history-from-saves" data-number="4" data-title="Build SCD2 history from repeated saves" data-track="sql" data-difficulty="medium" data-trap="null"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">NULL trap</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">window functions</span><span class="badge">nulls</span></p><h3><a href="../problems/scd2-history-from-saves/">4. Build SCD2 history from repeated saves</a></h3><p>Turn a table of customer saves into a slowly changing dimension (SCD type 2) with valid_from, valid_to and is_current, ignoring saves that changed nothing and handling NULL cities.</p></div>
-<div class="problem-card" data-slug="running-balance-tied-dates" data-number="5" data-title="The running balance that jumps ahead" data-track="debug-the-ai" data-difficulty="medium" data-trap="tie"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">Tie trap</span><span class="badge">window functions</span><span class="badge">running total</span><span class="badge">window frame</span></p><h3><a href="../problems/running-balance-tied-dates/">5. The running balance that jumps ahead</a></h3><p>An AI-written Spark SQL window query computes a running account balance, but transactions on the same date all show the end-of-day balance. Find the window frame bug and fix it.</p></div>
-<div class="problem-card" data-slug="data-quality-report" data-number="6" data-title="A data quality report that counts NULLs correctly" data-track="sql" data-difficulty="easy" data-trap="null duplicate"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge trap">Duplicate trap</span><span class="badge">data quality</span><span class="badge">nulls</span><span class="badge">not in</span><span class="badge">duplicates</span></p><h3><a href="../problems/data-quality-report/">6. A data quality report that counts NULLs correctly</a></h3><p>Write a Spark SQL data quality report with one row per rule and the number of failing rows. The rules cover NULLs, duplicates, date order and a reference lookup where NOT IN quietly returns nothing.</p></div>
-<div class="problem-card" data-slug="sessionize-page-views" data-number="7" data-title="Sessionize page views with a 30-minute gap" data-track="pyspark" data-difficulty="medium" data-trap="boundary tie"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge trap">Tie trap</span><span class="badge">sessionization</span><span class="badge">window functions</span><span class="badge">lag</span><span class="badge">gaps and islands</span></p><h3><a href="../problems/sessionize-page-views/">7. Sessionize page views with a 30-minute gap</a></h3><p>Group raw page views into user sessions with PySpark window functions. A session ends after more than 30 minutes of inactivity. Covers the exact boundary, long sessions and sessions across midnight.</p></div>
-<div class="problem-card" data-slug="union-swapped-columns" data-number="8" data-title="The union that swaps two columns" data-track="debug-the-ai" data-difficulty="easy" data-trap="schema"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge trap">Schema trap</span><span class="badge">union</span><span class="badge">unionByName</span><span class="badge">schema</span><span class="badge">aggregation</span></p><h3><a href="../problems/union-swapped-columns/">8. The union that swaps two columns</a></h3><p>AI-written PySpark code combines two regional sales tables with union() and reports wrong net revenue. The tables have the same columns in a different order. Find the bug and fix it.</p></div>
-<div class="problem-card" data-slug="merge-overlapping-periods" data-number="9" data-title="Merge overlapping coverage periods" data-track="sql" data-difficulty="hard" data-trap="boundary"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge trap">Boundary trap</span><span class="badge">gaps and islands</span><span class="badge">date ranges</span><span class="badge">window functions</span><span class="badge">running max</span></p><h3><a href="../problems/merge-overlapping-periods/">9. Merge overlapping coverage periods</a></h3><p>Merge overlapping and adjacent date ranges per user into continuous periods with Spark SQL. The classic gaps-and-islands problem, with nested periods that break the LAG-based solution.</p></div>
-<div class="problem-card" data-slug="asof-exchange-rate-join" data-number="10" data-title="Convert each transaction with the rate valid at the time" data-track="pyspark" data-difficulty="hard" data-trap="fan-out boundary"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">Fan-out trap</span><span class="badge trap">Boundary trap</span><span class="badge">as-of join</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">window functions</span></p><h3><a href="../problems/asof-exchange-rate-join/">10. Convert each transaction with the rate valid at the time</a></h3><p>A point-in-time (as-of) join in PySpark. Convert foreign-currency transactions to INR using the exchange rate that was valid when each transaction happened, without losing or duplicating rows.</p></div>
-<div class="problem-card" data-slug="top-products-with-ties" data-number="11" data-title="Top three products per category, ties included" data-track="sql" data-difficulty="easy" data-trap="tie"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">Tie trap</span><span class="badge">top n per group</span><span class="badge">rank</span><span class="badge">dense_rank</span><span class="badge">row_number</span><span class="badge">window functions</span></p><h3><a href="../problems/top-products-with-ties/">11. Top three products per category, ties included</a></h3><p>Return the three best-selling products in each category with Spark SQL, keeping every product that ties. Shows where ROW_NUMBER, RANK and DENSE_RANK give three different answers.</p></div>
-<div class="problem-card" data-slug="average-rating-nulls" data-number="12" data-title="The average rating where NULL is not zero" data-track="sql" data-difficulty="easy" data-trap="null"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge">aggregation</span><span class="badge">count</span><span class="badge">avg</span><span class="badge">nulls</span><span class="badge">coalesce</span></p><h3><a href="../problems/average-rating-nulls/">12. The average rating where NULL is not zero</a></h3><p>Compute review counts and the average rating per product with Spark SQL when some reviews have no rating. Covers COUNT(*) versus COUNT(column), and why replacing NULL with 0 ruins an average.</p></div>
-<div class="problem-card" data-slug="left-join-where-filter" data-number="13" data-title="The LEFT JOIN that a WHERE clause quietly undoes" data-track="sql" data-difficulty="easy" data-trap="null"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span><span class="badge">left join</span><span class="badge">on vs where</span><span class="badge">count</span><span class="badge">coalesce</span></p><h3><a href="../problems/left-join-where-filter/">13. The LEFT JOIN that a WHERE clause quietly undoes</a></h3><p>Report every customer with their completed March orders in Spark SQL, including customers with none. A filter on the joined table in WHERE turns the LEFT JOIN into an inner join and the zero rows disappear.</p></div>
-<div class="problem-card" data-slug="utc-dates-in-india-report" data-number="14" data-title="The daily report that is five and a half hours off" data-track="debug-the-ai" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">time zones</span><span class="badge">utc</span><span class="badge">ist</span><span class="badge">dates</span><span class="badge">daily aggregation</span></p><h3><a href="../problems/utc-dates-in-india-report/">14. The daily report that is five and a half hours off</a></h3><p>AI-written PySpark code builds a daily activity report for India from UTC timestamps. The weekly total is right but every day is wrong. Find the time zone bug and fix it.</p></div>
-<div class="problem-card" data-slug="daily-revenue-missing-days" data-number="15" data-title="Daily revenue with the missing days filled in" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">date spine</span><span class="badge">calendar table</span><span class="badge">cross join</span><span class="badge">left join</span><span class="badge">gaps</span></p><h3><a href="../problems/daily-revenue-missing-days/">15. Daily revenue with the missing days filled in</a></h3><p>Produce one row per store per day of March with Spark SQL, showing 0 on days without sales. A GROUP BY can only return days that have data; the missing days have to come from a calendar table.</p></div>
-<div class="problem-card" data-slug="month-over-month-gaps" data-number="16" data-title="Month-over-month change when a month is missing" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">lag</span><span class="badge">month over month</span><span class="badge">window functions</span><span class="badge">gaps</span><span class="badge">time series</span></p><h3><a href="../problems/month-over-month-gaps/">16. Month-over-month change when a month is missing</a></h3><p>Compute month-over-month revenue change per plan with Spark SQL. LAG returns the previous row, not the previous month, so a plan with a missing month gets compared across the gap.</p></div>
-<div class="problem-card" data-slug="explode-double-count" data-number="17" data-title="Order totals that grow after explode" data-track="pyspark" data-difficulty="medium" data-trap="fan-out"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Fan-out trap</span><span class="badge">explode</span><span class="badge">arrays</span><span class="badge">nested data</span><span class="badge">grain</span><span class="badge">aggregation</span></p><h3><a href="../problems/explode-double-count/">17. Order totals that grow after explode</a></h3><p>Summarise orders that carry a nested array of items with PySpark. After explode() each order is repeated once per item, so order-level values such as shipping fees get counted several times, and orders with no items vanish.</p></div>
-<div class="problem-card" data-slug="join-on-nullable-key" data-number="18" data-title="The regions that sold nothing, according to the join" data-track="debug-the-ai" data-difficulty="medium" data-trap="null"><p class="badges"><span class="badge track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">NULL trap</span><span class="badge">joins</span><span class="badge">null keys</span><span class="badge">eqNullSafe</span><span class="badge">composite key</span></p><h3><a href="../problems/join-on-nullable-key/">18. The regions that sold nothing, according to the join</a></h3><p>AI-written PySpark code compares regional sales with targets by joining on country and state. Regions whose state is NULL show zero sales, because NULL never equals NULL in a join. Find the bug and fix it.</p></div>
-<div class="problem-card" data-slug="scd2-point-in-time-lookup" data-number="19" data-title="Which tier was the customer in when they ordered?" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">point-in-time join</span><span class="badge">range join</span><span class="badge">between</span></p><h3><a href="../problems/scd2-point-in-time-lookup/">19. Which tier was the customer in when they ordered?</a></h3><p>Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.</p></div>
-<div class="problem-card" data-slug="apply-changes-to-scd2" data-number="20" data-title="Apply a batch of changes to an SCD2 table" data-track="pyspark" data-difficulty="hard" data-trap="late-data"><p class="badges"><span class="badge track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">Late-data trap</span><span class="badge">scd2</span><span class="badge">slowly changing dimension</span><span class="badge">merge</span><span class="badge">upsert</span><span class="badge">late-arriving data</span></p><h3><a href="../problems/apply-changes-to-scd2/">20. Apply a batch of changes to an SCD2 table</a></h3><p>Merge a batch of customer changes into a type 2 slowly changing dimension with PySpark. Close old versions, open new ones, skip saves that changed nothing, handle several changes for one customer, and ignore changes that arrive too late.</p></div>
 </div>
-<p id="no-results" hidden>No problems match. <button type="button" class="link-button" id="clear-filters">Clear everything</button></p>
 
 <script defer src="../static/filters.js?v=909a6a3f76"></script>
 
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <p>NullTrap. All datasets are synthetic. Problems run in Google Colab.</p>
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../"><img src="../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../problems/">All problems</a></li>
+          <li><a href="../problems/?track=sql">SQL track</a></li>
+          <li><a href="../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
     </div>
   </footer>
 </body>

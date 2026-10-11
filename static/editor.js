@@ -9,6 +9,7 @@ const config = JSON.parse(document.getElementById("editor-config").textContent);
 const sqlBox = document.getElementById("editor-sql");
 const runButton = document.getElementById("editor-run");
 const checkButton = document.getElementById("editor-check");
+const resetButton = document.getElementById("editor-reset");
 const statusLine = document.getElementById("editor-status");
 const messageBox = document.getElementById("editor-message");
 const resultBox = document.getElementById("editor-result");
@@ -37,10 +38,23 @@ sqlBox.addEventListener("keydown", (event) => {
   }
 });
 
+// The line next to the buttons. While something is running it shows a spinner.
+function setStatus(text) {
+  statusLine.textContent = text;
+  statusLine.classList.toggle("is-busy", Boolean(text));
+}
+
+function showEmptyResult(text) {
+  const empty = document.createElement("p");
+  empty.className = "result-empty";
+  empty.textContent = text;
+  resultBox.replaceChildren(empty);
+}
+
 let connectionPromise = null;
 
 async function connect() {
-  statusLine.textContent = "Loading the SQL engine (first run only, a few MB) ...";
+  setStatus("Loading the SQL engine (first run only, a few MB) ...");
   const duckdb = await import(config.engine_url);
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
   // A worker cannot be started straight from another origin, so wrap it in a local blob.
@@ -51,7 +65,7 @@ async function connect() {
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
   URL.revokeObjectURL(workerUrl);
 
-  statusLine.textContent = "Loading the data ...";
+  setStatus("Loading the data ...");
   for (const table of config.tables) {
     const response = await fetch(table.url);
     if (!response.ok) throw new Error("Could not load the table " + table.name + ".");
@@ -125,11 +139,21 @@ function showTable(columns, preview, rowCount) {
     });
   });
   const caption = document.createElement("p");
-  caption.className = "note";
+  caption.className = "result-caption";
   caption.textContent = rowCount > preview.length
     ? rowCount + " rows. Showing the first " + preview.length + "."
     : rowCount + (rowCount === 1 ? " row." : " rows.");
-  resultBox.replaceChildren(caption, table);
+  if (!rowCount) {
+    showEmptyResult("The query ran and returned no rows.");
+    return;
+  }
+  const scroller = document.createElement("div");
+  scroller.className = "table-wrap";
+  scroller.tabIndex = 0;  // lets keyboard users scroll a wide or long result
+  scroller.setAttribute("role", "region");
+  scroller.setAttribute("aria-label", "Query result");
+  scroller.append(table);
+  resultBox.replaceChildren(caption, scroller);
 }
 
 // Runs the visitor's query into the result table and shows a preview.
@@ -196,11 +220,11 @@ function cleanError(error) {
 }
 
 async function run(withCheck) {
-  runButton.disabled = checkButton.disabled = true;
+  runButton.disabled = checkButton.disabled = resetButton.disabled = true;
   messageBox.hidden = true;
   try {
     const connection = await getConnection();
-    statusLine.textContent = "Running ...";
+    setStatus("Running ...");
     const result = await execute(connection);
     if (withCheck) {
       const hints = await grade(connection, result);
@@ -211,15 +235,25 @@ async function run(withCheck) {
         if (window.nullTrapMarkSolved) window.nullTrapMarkSolved(config.slug);
       }
     }
-    statusLine.textContent = "";
   } catch (error) {
-    resultBox.replaceChildren();
-    statusLine.textContent = "";
+    showEmptyResult("No result to show.");
     showMessage("error", "The query did not run.", [cleanError(error)]);
   } finally {
-    runButton.disabled = checkButton.disabled = false;
+    setStatus("");
+    runButton.disabled = checkButton.disabled = resetButton.disabled = false;
   }
 }
+
+// Reset throws the visitor's draft away, so it asks first.
+resetButton.addEventListener("click", () => {
+  if (sqlBox.value.trim() === config.starter.trim()) return;
+  if (!window.confirm("Replace your query with the starting query? Your draft will be lost.")) return;
+  sqlBox.value = config.starter;
+  saveDraft();
+  messageBox.hidden = true;
+  showEmptyResult("Your result appears here. Your draft is kept in this browser.");
+  sqlBox.focus();
+});
 
 runButton.addEventListener("click", () => run(false));
 checkButton.addEventListener("click", () => run(true));
