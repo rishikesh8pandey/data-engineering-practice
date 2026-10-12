@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The invoice numbers that sort like words | SQL problem | NullTrap</title>
+  <meta name="description" content="Invoice numbers are stored as text, some with leading zeros. Find each customer&#x27;s latest invoice and count the paid ones in Spark SQL without being fooled by text comparison, where &#x27;9&#x27; is greater than &#x27;1000&#x27;.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/text-invoice-numbers/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The invoice numbers that sort like words | SQL problem | NullTrap">
+  <meta property="og:description" content="Invoice numbers are stored as text, some with leading zeros. Find each customer&#x27;s latest invoice and count the paid ones in Spark SQL without being fooled by text comparison, where &#x27;9&#x27; is greater than &#x27;1000&#x27;.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/text-invoice-numbers/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 22</span>
+    </nav>
+    <h1>22. The invoice numbers that sort like words</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">Schema trap</span></p>
+    <p class="tags">data types &middot; casting &middot; string comparison &middot; joins</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/022-text-invoice-numbers.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="text-invoice-numbers" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>Invoice numbers are plain running numbers: a higher number means a later invoice. In
+the <code>invoices</code> table they are stored as text, because the old billing system printed
+them with leading zeros (<code>0042</code>). The <code>payments</code> table, built later, stores the same
+numbers as integers.</p>
+<p>A customer statement shows the customer's latest invoice. One customer complained
+that their statement stops at invoice 99, although they have received invoice 1000.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="invoices"><code>invoices</code></h3>
+<p>One row per invoice.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>invoice_no</code></td>
+<td>STRING</td>
+<td>The invoice number as text. Older invoices are padded with zeros to four digits (<code>0042</code>); newer ones are not (<code>105</code>, <code>1003</code>).</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who was invoiced.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Invoice value in rupees.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="payments"><code>payments</code></h3>
+<p>One row per paid invoice. An invoice is paid at most once.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>invoice_no</code></td>
+<td>BIGINT</td>
+<td>The number of the invoice that was paid.</td>
+</tr>
+<tr>
+<td><code>paid_on</code></td>
+<td>DATE</td>
+<td>Date of the payment.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row per customer.</p>
+<ul>
+<li><code>invoice_count</code> is the number of invoices of the customer.</li>
+<li><code>latest_invoice_no</code> is the customer's highest invoice number, compared as a
+  number. <code>1000</code> is later than <code>99</code>, and <code>0042</code> is invoice 42.</li>
+<li><code>paid_invoices</code> is how many of the customer's invoices have a payment. Invoice
+  <code>0042</code> is paid if <code>payments</code> has a row for 42.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per customer.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>invoice_count</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>latest_invoice_no</code></td>
+<td>BIGINT</td>
+<td>The highest invoice number, as a number.</td>
+</tr>
+<tr>
+<td><code>paid_invoices</code></td>
+<td>BIGINT</td>
+<td>0 if none are paid.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+<section id="editor" class="editor">
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. 
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
+  <script type="application/json" id="editor-config">{"slug": "text-invoice-numbers", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "invoices", "url": "../../data/022-text-invoice-numbers/invoices.parquet"}, {"name": "payments", "url": "../../data/022-text-invoice-numbers/payments.parquet"}], "starter": "-- Tables: invoices, payments\nSELECT *\nFROM invoices\nLIMIT 10", "expected": {"columns": ["customer_id", "invoice_count", "latest_invoice_no", "paid_invoices"], "row_count": 25, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"invoice_count\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"latest_invoice_no\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"paid_invoices\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "ce2183c52d8e8b0e76544689cea79901fa2eb7dd0a3667679f3562fa0988bc3e", "column_checks": [{"name": "customer_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"customer_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "8c40044f49e7aa58c77f3b466bbb29fbed30cecb25f754206eac579b86845db6"}, {"name": "invoice_count", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"invoice_count\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "d58ab336ce98e5876fe65a8214ec3f2d3e863ee30964d9a553d402f7e9d33154"}, {"name": "latest_invoice_no", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"latest_invoice_no\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "fb161e6a298dd40edd6a28e3b8474cff71c19e143b6c553ed54412e438cf5cb9"}, {"name": "paid_invoices", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"paid_invoices\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "77661910e3b912a56f7eaa283bf33f8c4876c29283b88e4e0fd0f08ba8909333"}]}}</script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>A column's type decides how its values are compared. <code>invoice_no</code> holds numbers, but
+it is a STRING, so it is compared the way words are: character by character, from
+the left.</p>
+<ul>
+<li><code>'99' &gt; '1000'</code> is true. The first characters are <code>9</code> and <code>1</code>, and <code>9</code> is later.
+  Nothing after that is looked at.</li>
+<li><code>'0042' = '42'</code> is false. They are different strings.</li>
+</ul>
+<p>So the fix is one cast, done once, and used for everything:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">CAST</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">invoice_no</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">BIGINT</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>MAX</code> of that is the latest invoice, and joining on it finds invoice 42 in
+<code>payments</code> whether the text says <code>0042</code> or <code>42</code>.</p>
+<p><code>COUNT(p.invoice_no)</code> counts the invoices that found a payment. The join has to be a
+<code>LEFT JOIN</code>, or unpaid invoices disappear and take <code>invoice_count</code> down with them.</p>
+<p>There are 176 invoices for 25 customers; 60 of them are zero-padded. 119 have a
+payment.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>MAX(invoice_no)</code> on the text.</strong> Returns the "largest" string. Customer 25 has
+invoices <code>0009</code>, <code>99</code>, <code>100</code> and <code>1000</code>, and the text maximum is <code>99</code>. That is the
+statement that stops too early. Wrapping the result in a cast,
+<code>CAST(MAX(invoice_no) AS BIGINT)</code>, does not help: the wrong value has already been
+picked. On this data the latest invoice is wrong for 22 of the 25 customers.</p>
+<p>Cast first, then aggregate.</p>
+<p><strong>Leaving <code>latest_invoice_no</code> as text.</strong> Even where the value is right, the column
+is a STRING and the check reports the type. The output column is BIGINT.</p>
+<p><strong>Joining on text: <code>CAST(p.invoice_no AS STRING) = i.invoice_no</code>.</strong> Turns 42 into
+<code>'42'</code>, which is not <code>'0042'</code>. Every payment for a padded invoice is lost: only 82
+of the 119 payments still match, and <code>paid_invoices</code> is too low for 19 customers.
+No error, no warning.</p>
+<p><strong>Padding the number: <code>LPAD(CAST(p.invoice_no AS STRING), 4, '0') = i.invoice_no</code>.</strong>
+Fixes <code>0042</code> and breaks <code>105</code>, which becomes <code>0105</code> and no longer matches. The
+padding rule changed halfway through the data, so no single text format fits. Wrong
+for 22 customers.</p>
+<p><strong><code>INNER JOIN</code> to payments.</strong> Keeps only paid invoices, so <code>invoice_count</code> and
+<code>latest_invoice_no</code> are computed from those alone. Wrong for 23 customers.</p>
+<h2>What Spark does if you join without any cast</h2>
+<div class="codehilite"><pre><span></span><code><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">payments</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">invoice_no</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">invoice_no</span>
+</code></pre></div>
+
+<p>This compares a BIGINT with a STRING, and it returns the right answer. Spark does
+not compare them as text: the query plan shows it casting the string side,
+<code>cast(invoice_no as bigint)</code>. DuckDB does the same.</p>
+<p>It works, but you are relying on a rule you did not write. In Spark 4 the same
+implicit cast fails the whole query the day one invoice number is not a number
+(<code>INV-17</code>). Write the cast yourself, so the intent is visible; if dirty values are
+possible, use <code>TRY_CAST</code> and decide what a NULL means.</p>
+<h2>The real fix</h2>
+<p>Store numbers as numbers. A text key that is "really a number" will be compared as
+text by someone, in some query, sooner or later. If the leading zeros matter for
+display, format them at display time.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zero-padded numbers</td>
+<td>invoices 1 to 60</td>
+<td>Joining on text.</td>
+</tr>
+<tr>
+<td>Unpadded numbers of three and four digits</td>
+<td>61 to 140, 1000 to 1035</td>
+<td><code>MAX</code> on text; <code>LPAD</code> to four.</td>
+</tr>
+<tr>
+<td>One invoice of every length</td>
+<td>customer 25: <code>0009</code>, <code>99</code>, <code>100</code>, <code>1000</code></td>
+<td>Text <code>MAX</code> returns <code>99</code>.</td>
+</tr>
+<tr>
+<td>Only padded invoices</td>
+<td>customer 24</td>
+<td>Text <code>MAX</code> happens to be right here, which is why the bug survives spot checks.</td>
+</tr>
+<tr>
+<td>Unpaid invoices</td>
+<td>57 invoices</td>
+<td><code>INNER JOIN</code>.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../pivot-order-statuses/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">21. Order statuses as columns, with zeros where there are none</span></a>
+      <a class="pager-link next" href="../conversion-rate-zero-denominator/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">23. Conversion rates when the denominator is zero</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

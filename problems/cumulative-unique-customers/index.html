@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customers to date, counted once | PySpark problem | NullTrap</title>
+  <meta name="description" content="Build a daily table of active, new and cumulative unique customers with PySpark. A running sum of daily distinct counts counts every returning customer again, and Spark has no distinct count over a window.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/cumulative-unique-customers/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Customers to date, counted once | PySpark problem | NullTrap">
+  <meta property="og:description" content="Build a daily table of active, new and cumulative unique customers with PySpark. A running sum of daily distinct counts counts every returning customer again, and Spark has no distinct count over a window.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/cumulative-unique-customers/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 33</span>
+    </nav>
+    <h1>33. Customers to date, counted once</h1>
+    <p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge medium">Medium</span><span class="badge trap">Grain trap</span></p>
+    <p class="tags">count distinct &middot; running total &middot; window functions &middot; cohort &middot; first seen</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/033-cumulative-unique-customers.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="cumulative-unique-customers" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>The growth team has a chart called "customers to date". It is built from the daily
+active customers table: add up the daily numbers, day after day.</p>
+<p>In June the chart passed the number of people who have an account at all. A customer
+who buys on five different days is in five daily numbers, and the chart adds them
+all.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="purchases"><code>purchases</code></h3>
+<p>One row per purchase.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>purchase_id</code></td>
+<td>BIGINT</td>
+<td>Unique per purchase.</td>
+</tr>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer who bought. Never NULL.</td>
+</tr>
+<tr>
+<td><code>purchased_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the purchase happened.</td>
+</tr>
+</tbody>
+</table></div>
+<p>A customer can buy several times on one day.</p>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row per date that has at least one purchase.</p>
+<ul>
+<li><code>purchase_date</code> is the date part of <code>purchased_at</code>.</li>
+<li><code>active_customers</code> is the number of different customers who bought on that date.</li>
+<li><code>new_customers</code> is the number of different customers whose first ever purchase
+  was on that date. It is 0 on a date where everybody had bought before.</li>
+<li><code>cumulative_customers</code> is the number of different customers who bought on that
+  date or on any earlier date. Each customer counts once, however often they buy.</li>
+<li>A date with no purchases at all does not appear.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per date with purchases.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>purchase_date</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>active_customers</code></td>
+<td>BIGINT</td>
+<td>Distinct customers that day.</td>
+</tr>
+<tr>
+<td><code>new_customers</code></td>
+<td>BIGINT</td>
+<td>Customers buying for the first time that day.</td>
+</tr>
+<tr>
+<td><code>cumulative_customers</code></td>
+<td>BIGINT</td>
+<td>Distinct customers up to and including that day.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>A distinct count cannot be built by adding up smaller distinct counts. A customer
+who buys on five days is in five daily numbers.</p>
+<p>The way out is to find something about each customer that happens <strong>exactly once</strong>
+and count that instead. Each customer has exactly one first purchase date. So:</p>
+<ol>
+<li>For every purchase, work out the customer's first purchase date:
+   <code>F.min("purchase_date").over(Window.partitionBy("customer_id"))</code>.</li>
+<li>Per day, count the customers whose first date is that day. These are the new
+   customers. Each customer is new on one day only.</li>
+<li>Keep a running sum of the new customers. Numbers that count each customer once
+   <em>can</em> be added up.</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="n">is_first_day</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;purchase_date&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;first_date&quot;</span><span class="p">)</span>
+<span class="n">daily</span> <span class="o">=</span> <span class="n">dated</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s2">&quot;purchase_date&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">countDistinct</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;active_customers&quot;</span><span class="p">),</span>
+    <span class="n">F</span><span class="o">.</span><span class="n">countDistinct</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">is_first_day</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;new_customers&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><code>when</code> without <code>otherwise</code> returns NULL for returning customers, and
+<code>countDistinct</code> ignores NULLs. On a day with only returning customers the count is
+0, and the day still has its row because the grouping is over all purchases.</p>
+<p>There are 343 purchases by 70 customers on 29 days. The cumulative number has to end
+at 70.</p>
+<h2>Common wrong answers</h2>
+<p><strong>A running sum of <code>active_customers</code>.</strong> The chart from the story. It ends at 208
+for 70 customers, and it is wrong on 28 of the 29 days. Only the first day is right,
+because on the first day everybody is new.</p>
+<p><strong><code>F.countDistinct("customer_id").over(window)</code>.</strong> The obvious thing to write, and
+Spark refuses it: <code>[DISTINCT_WINDOW_FUNCTION_UNSUPPORTED] Distinct window functions
+are not supported</code>. Many people stop here and fall back to the running sum.</p>
+<p><strong><code>F.approx_count_distinct("customer_id").over(window)</code>.</strong> This one runs. It is an
+estimate, and even with 70 customers it is off on 12 of the 29 days. Fine for a
+dashboard with millions of users where a percent does not matter, wrong for
+anything that has to reconcile.</p>
+<p><strong>Counting purchases instead of customers on the first day.</strong> <code>F.count</code> instead of
+<code>F.countDistinct</code> for <code>new_customers</code>. A customer who buys twice on their first day
+is two new customers. Every row of the result is wrong, because the error is carried
+forward by the running sum.</p>
+<p><strong>Joining a separate "new customers per day" table without handling the misses.</strong>
+Five days have no new customer at all. With a left join those days get NULL instead
+of 0. With an inner join they vanish: 24 rows instead of 29.</p>
+<h2>Other correct ways, and what they cost</h2>
+<p><strong><code>F.size(F.collect_set("customer_id").over(window))</code></strong> on the purchases, with a
+frame from the start up to the current date. Correct values. Two catches: <code>size</code>
+returns an INT, so the check reports the type until you cast to <code>bigint</code>; and every
+row carries the full set of customers so far, which is a lot of memory on real
+data.</p>
+<p><strong>A self-join</strong>: for every day, join all purchases on or before it and count
+distinct customers. Correct, and the join grows with days times purchases. It is
+the first thing to time out when the table grows.</p>
+<p>The first-seen method touches every purchase once, and it gives you
+<code>new_customers</code> on the way, which is usually wanted anyway.</p>
+<h2>A detail about the window</h2>
+<p>The running sum uses a window with no <code>partitionBy</code>. Spark warns that all rows move
+to one partition. Here that is 29 rows, one per day, so it is fine. It is the daily
+table that goes through the window, not the purchases. If you ever need a running
+total per something (per country, per product), partition by it.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Returning customers</td>
+<td>most days</td>
+<td>A running sum of daily actives.</td>
+</tr>
+<tr>
+<td>A day with only returning customers</td>
+<td>24 June, and four more days</td>
+<td><code>new_customers</code> must be 0, not NULL, and the row must be there.</td>
+</tr>
+<tr>
+<td>A day with no purchases</td>
+<td>17 June</td>
+<td>Must not appear. The result has 29 rows, not 30.</td>
+</tr>
+<tr>
+<td>Two or three purchases by one customer on one day</td>
+<td>common</td>
+<td>Counting purchases instead of customers.</td>
+</tr>
+<tr>
+<td>Purchases at 23:59:59 and at 00:00:00</td>
+<td>customer 301, 9 and 10 June</td>
+<td>The date boundary.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../json-payload-schema-drift/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">32. JSON payloads that changed shape</span></a>
+      <a class="pager-link next" href="../reconcile-source-and-target/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">34. Reconcile a target table against its source</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

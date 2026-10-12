@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>One golden record from three systems | PySpark problem | NullTrap</title>
+  <meta name="description" content="Merge customer records from CRM, billing and support into one row per customer with PySpark, taking each field from the most trusted record that actually has it. Keeping the single best row throws away values the other records had.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/golden-customer-record/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="One golden record from three systems | PySpark problem | NullTrap">
+  <meta property="og:description" content="Merge customer records from CRM, billing and support into one row per customer with PySpark, taking each field from the most trusted record that actually has it. Keeping the single best row throws away values the other records had.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/golden-customer-record/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 35</span>
+    </nav>
+    <h1>35. One golden record from three systems</h1>
+    <p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">NULL trap</span></p>
+    <p class="tags">master data &middot; survivorship &middot; deduplication &middot; window functions &middot; first ignore nulls</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/035-golden-customer-record.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="golden-customer-record" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>Three systems each keep their own copy of a customer: the CRM, billing and the
+support desk. Marketing wants one row per customer with the best email, phone and
+city the company knows.</p>
+<p>The current job keeps the most trusted record of each customer and drops the rest.
+The CRM record usually wins, and the CRM often has no phone number. Billing had one.
+It was thrown away with the rest of the billing record.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="customer_records"><code>customer_records</code></h3>
+<p>One row per record of a customer in one system. A system can hold several records
+for the same customer, saved at different times.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The customer. Never NULL.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>STRING</td>
+<td><code>crm</code>, <code>billing</code> or <code>support</code>.</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>STRING</td>
+<td>NULL if this record has none.</td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td>STRING</td>
+<td>NULL if this record has none.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>NULL if this record has none.</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When this record was last saved.</td>
+</tr>
+</tbody>
+</table></div>
+<p>A customer never has two records with the same <code>updated_at</code>.</p>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row per customer.</p>
+<p>Rank a customer's records by trust:</p>
+<ol>
+<li>By source: <code>crm</code> first, then <code>billing</code>, then <code>support</code>.</li>
+<li>Within the same source, the record with the later <code>updated_at</code> first.</li>
+</ol>
+<p>Each of <code>email</code>, <code>phone</code> and <code>city</code> is decided on its own: take the value from the
+highest-ranked record in which that column is not NULL. The three values of one
+customer can come from three different records.</p>
+<p>If no record of the customer has a value for a column, that column is NULL.</p>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per customer.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>The usual deduplication pattern is "rank the rows, keep rank 1". It answers the
+question <em>which row is best</em>. This problem asks a different question, three times:
+<em>which value is best for this column</em>. The best email and the best phone number can
+sit in different rows.</p>
+<p>So rank the rows once, and let each column look down the ranking on its own until it
+finds a value:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">trust</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;source&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;crm&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;source&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;billing&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="n">best_first</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="n">trust</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;updated_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">desc</span><span class="p">())</span>
+    <span class="o">.</span><span class="n">rowsBetween</span><span class="p">(</span><span class="n">Window</span><span class="o">.</span><span class="n">unboundedPreceding</span><span class="p">,</span> <span class="n">Window</span><span class="o">.</span><span class="n">unboundedFollowing</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">F</span><span class="o">.</span><span class="n">first</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="n">ignorenulls</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">best_first</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Three details carry the solution:</p>
+<ul>
+<li><strong><code>ignorenulls=True</code>.</strong> Without it, <code>first</code> returns the value of the first row,
+  NULL or not, and you are back to "keep the best row".</li>
+<li><strong>The frame.</strong> A window with an <code>orderBy</code> has a default frame that ends at the
+  current row. <code>first(..., ignorenulls=True)</code> over that frame only sees the rows
+  ranked above the current one, so different rows of one customer get different
+  answers. The frame has to cover the whole partition.</li>
+<li><strong>The trust order is written out.</strong> <code>crm</code>, <code>billing</code>, <code>support</code> is a business
+  ranking, not an alphabetical one, so it is turned into 1, 2, 3 explicitly.</li>
+</ul>
+<p>After that every row of a customer carries the same three values, and <code>distinct()</code>
+leaves one row per customer. If no record has a value for a column, <code>first</code> finds
+nothing and returns NULL.</p>
+<p>There are 122 records for 45 customers. For 24 of them the golden record combines
+values from more than one record.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Keeping the best row.</strong> <code>row_number() == 1</code> over the same ordering, then select
+the three columns. This is the job from the story. It is wrong for 24 of the 45
+customers. The best rows have 18 missing emails, 20 missing phone numbers and 12
+missing cities; the golden records have 6, 7 and 4. Every one of those gaps was
+filled in some other record that got thrown away.</p>
+<p><strong><code>F.first(column)</code> without <code>ignorenulls</code>.</strong> The same result as keeping the best
+row, with more code. Wrong for the same 24 customers.</p>
+<p><strong>The default frame.</strong> Leaving out <code>rowsBetween</code> gives 74 rows instead of 45. A
+customer whose top record has no phone gets one row with a NULL phone (from the top
+record's point of view) and another with the phone filled in (from the second
+record's point of view), and <code>distinct()</code> keeps both.</p>
+<p><strong>Latest record wins, whatever the source.</strong> Ordering by <code>updated_at</code> alone. Wrong
+for 18 customers. Customer 43's support record is the newest by months; the CRM
+values still win, because the CRM is the more trusted system.</p>
+<p><strong>Ordering by <code>source</code> as text.</strong> Alphabetically it is <code>billing</code>, <code>crm</code>, <code>support</code>,
+so billing beats the CRM. Wrong for 19 customers.</p>
+<p><strong>The right sources, but the oldest record first.</strong> Forgetting <code>.desc()</code> on
+<code>updated_at</code>. Wrong for 13 customers.</p>
+<p><strong><code>F.max(column)</code> per customer.</strong> Returns the alphabetically last email and the
+highest phone number. It always returns a value when one exists, so the result looks
+complete. Wrong for 25 customers.</p>
+<p><strong><code>groupBy("customer_id").agg(F.first("email", ignorenulls=True))</code> after an
+<code>orderBy</code>.</strong> A <code>groupBy</code> does not promise to see rows in the order of an earlier
+sort. It may work on a small table and stop working when the data is spread over
+more partitions. Ordering that matters belongs in a window.</p>
+<h2>Another correct way</h2>
+<p>Do it one column at a time: filter to the records where the column is not NULL,
+keep the top-ranked record per customer with <code>row_number</code>, and left join the three
+results to the list of customers. It gives the same answer as the reference
+solution. The joins have to be left joins: with inner joins, a customer with no
+phone number anywhere drops out, and the result has 33 rows.</p>
+<p>In SQL the window version is <code>FIRST_VALUE(email) IGNORE NULLS OVER (...)</code>, with the
+same full frame.</p>
+<h2>Keep track of where a value came from</h2>
+<p>Marketing will ask "why does this customer have this phone number?". A golden
+record is much easier to defend if it also stores which source and which
+<code>updated_at</code> each value came from. That is the same window with
+<code>F.first(F.when(F.col("phone").isNotNull(), F.col("source")), ignorenulls=True)</code>.
+The problem does not ask for it. A real pipeline should.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Customer</th>
+<th>Records</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>41</td>
+<td>CRM has no email; billing has one</td>
+<td>Email from billing, phone and city from the CRM.</td>
+</tr>
+<tr>
+<td>42</td>
+<td>Latest CRM record has no phone; an older CRM record has one</td>
+<td>The older CRM phone, not billing's. Email and city from the latest CRM record.</td>
+</tr>
+<tr>
+<td>43</td>
+<td>Support record is the newest</td>
+<td>All three values from the CRM.</td>
+</tr>
+<tr>
+<td>44</td>
+<td>Nobody has a phone; only billing has a city</td>
+<td>Phone NULL, city from billing, email from the CRM.</td>
+</tr>
+<tr>
+<td>45</td>
+<td>Only a support record</td>
+<td>Its values as they are; phone NULL.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../reconcile-source-and-target/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">34. Reconcile a target table against its source</span></a>
+      <a class="pager-link next" href="../when-chain-order/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">36. The bucket no order ever lands in</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -163,7 +163,8 @@ a:hover { text-decoration-thickness: 2px; }
 [hidden] { display: none !important; }
 
 code, pre, kbd, textarea { font-family: var(--font-mono); font-variant-ligatures: none; }
-code { font-size: 0.875em; background: var(--surface-strong); padding: 0.12em 0.38em; border-radius: 5px; }
+/* Inline code may break anywhere: a long method chain must not push the page wider than a phone. */
+code { font-size: 0.875em; background: var(--surface-strong); padding: 0.12em 0.38em; border-radius: 5px; overflow-wrap: anywhere; }
 kbd {
   font-size: 0.78em;
   color: var(--ink-text);

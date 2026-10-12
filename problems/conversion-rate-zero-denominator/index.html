@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversion rates when the denominator is zero | SQL problem | NullTrap</title>
+  <meta name="description" content="Compute click and signup rates per campaign in Spark SQL when some campaigns have zero impressions, zero clicks or missing counts. A rate that cannot be computed must be NULL, not 0 and not an error.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/conversion-rate-zero-denominator/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Conversion rates when the denominator is zero | SQL problem | NullTrap">
+  <meta property="og:description" content="Compute click and signup rates per campaign in Spark SQL when some campaigns have zero impressions, zero clicks or missing counts. A rate that cannot be computed must be NULL, not 0 and not an error.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/conversion-rate-zero-denominator/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 23</span>
+    </nav>
+    <h1>23. Conversion rates when the denominator is zero</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span></p>
+    <p class="tags">division by zero &middot; nullif &middot; rates &middot; nulls</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/023-conversion-rate-zero-denominator.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="conversion-rate-zero-denominator" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>Marketing ranks campaigns by two rates: how often an ad is clicked, and how often a
+click turns into a signup.</p>
+<p>Some campaigns were never shown, some were shown and never clicked, and for a few
+the click or signup tracking was broken, so the count is missing. The current report
+either stops with a division error or shows those campaigns with a rate of 0, which
+puts a campaign that was never shown at the bottom of the ranking next to the truly
+bad ones.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="campaign_stats"><code>campaign_stats</code></h3>
+<p>One row per campaign.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>campaign_id</code></td>
+<td>BIGINT</td>
+<td>Unique per campaign.</td>
+</tr>
+<tr>
+<td><code>channel</code></td>
+<td>STRING</td>
+<td><code>search</code>, <code>social</code>, <code>email</code> or <code>display</code>.</td>
+</tr>
+<tr>
+<td><code>impressions</code></td>
+<td>BIGINT</td>
+<td>How many times the ad was shown. Never NULL, can be 0.</td>
+</tr>
+<tr>
+<td><code>clicks</code></td>
+<td>BIGINT</td>
+<td>How many times it was clicked. NULL if click tracking was broken.</td>
+</tr>
+<tr>
+<td><code>signups</code></td>
+<td>BIGINT</td>
+<td>How many signups followed. NULL if signup tracking was broken.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return both rates for every campaign.</p>
+<ul>
+<li><code>click_rate</code> is <code>clicks</code> divided by <code>impressions</code>.</li>
+<li><code>signup_rate</code> is <code>signups</code> divided by <code>clicks</code>.</li>
+<li>A rate is NULL when it cannot be computed: the number it is divided by is 0 or
+  NULL, or the number being divided is NULL.</li>
+<li>A rate of 0 means something specific: the ad was shown (or clicked) and nothing
+  followed. A campaign with 2,000 impressions and 0 clicks has <code>click_rate</code> 0 and
+  <code>signup_rate</code> NULL.</li>
+<li>Do not round.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per campaign.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>campaign_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>click_rate</code></td>
+<td>DOUBLE</td>
+<td>NULL if it cannot be computed.</td>
+</tr>
+<tr>
+<td><code>signup_rate</code></td>
+<td>DOUBLE</td>
+<td>NULL if it cannot be computed.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+<section id="editor" class="editor">
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. DuckDB does not stop on a division by zero the way Spark 4 does. Guard the division anyway, so the same query works on both.
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
+  <script type="application/json" id="editor-config">{"slug": "conversion-rate-zero-denominator", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "campaign_stats", "url": "../../data/023-conversion-rate-zero-denominator/campaign_stats.parquet"}], "starter": "-- Tables: campaign_stats\nSELECT *\nFROM campaign_stats\nLIMIT 10", "expected": {"columns": ["campaign_id", "click_rate", "signup_rate"], "row_count": 60, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"campaign_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(round(\"click_rate\", 6) AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(round(\"signup_rate\", 6) AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "314347a1adce4fa04ab503ea30293f10d0bfeb3a14c671b9da532a9c037b3863", "column_checks": [{"name": "campaign_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"campaign_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "df8b8cd44926057fd9901c149293fa606fea9ab5d86f1ba9ca6370e0936a684d"}, {"name": "click_rate", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"click_rate\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "91801795b5180ce0da917a9327e44ace52fd7bca2bae63392c097b7c2d3a1a33"}, {"name": "signup_rate", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"signup_rate\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "94ca8b3645d8d7c744967adf4a278e45aadc773513ceedeb3cd5dc36fd842b01"}]}}</script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">clicks</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="k">NULLIF</span><span class="p">(</span><span class="n">impressions</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">click_rate</span>
+</code></pre></div>
+
+<p><code>NULLIF(a, b)</code> returns NULL when <code>a</code> equals <code>b</code>, and <code>a</code> otherwise. So a zero
+denominator becomes NULL, and dividing by NULL gives NULL. No error, and no invented
+number.</p>
+<p>Nothing more is needed for the missing counts. Any arithmetic with a NULL in it is
+NULL, so a NULL <code>clicks</code> gives a NULL <code>click_rate</code>, and a NULL <code>clicks</code> in the
+denominator gives a NULL <code>signup_rate</code>.</p>
+<p>The requirement separates two things that a report tends to merge:</p>
+<ul>
+<li><strong>0</strong> means it was measured and nothing happened: 2,000 impressions, 0 clicks.</li>
+<li><strong>NULL</strong> means there is nothing to measure, or the measurement is missing.</li>
+</ul>
+<p>Of the 60 campaigns, <code>click_rate</code> is NULL for 10 (6 were never shown, 4 have no
+click count) and it is a real 0 for 5. <code>signup_rate</code> is NULL for 20.</p>
+<p>In Spark <code>/</code> between two integers gives a DOUBLE, so no cast is needed. That is not
+true in every database: in some, <code>3 / 4</code> is 0.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Plain division: <code>clicks / impressions</code>.</strong> In Spark 4 the query stops:</p>
+<div class="codehilite"><pre><span></span><code>[DIVIDE_BY_ZERO] Division by zero. Use `try_divide` to tolerate divisor being 0
+and return NULL instead.
+</code></pre></div>
+
+<p>One campaign with zero impressions fails the whole report. Before Spark 4 the same
+query returned NULL for that row without saying anything, which is why old jobs
+break after an upgrade. DuckDB, in the browser editor, does neither: it returns
+<code>inf</code> for 1/0 and <code>nan</code> for 0/0, and carries on.</p>
+<p><strong><code>COALESCE(rate, 0)</code>.</strong> Removes the error and the meaning with it. A campaign that
+was never shown now has a click rate of 0, the same as one that was shown 2,000
+times and ignored. Wrong for 20 of the 60 campaigns. Sorted by rate, the campaigns
+with broken tracking sit at the bottom with the genuinely bad ones.</p>
+<p><strong><code>CASE WHEN impressions = 0 THEN 0 ELSE clicks / impressions END</code>.</strong> The same idea
+written out. Wrong for 11 campaigns.</p>
+<p><strong><code>COALESCE(clicks, 0) / NULLIF(impressions, 0)</code>.</strong> Replaces a missing count with 0
+before dividing. "We do not know how many clicks there were" becomes "there were no
+clicks". Wrong for 9 campaigns.</p>
+<p><strong><code>ROUND(..., 4)</code>.</strong> The requirement says not to round. Rounding belongs where the
+number is displayed. A rounded rate that is later multiplied or averaged carries the
+rounding error along.</p>
+<p><strong><code>clicks DIV impressions</code>.</strong> <code>DIV</code> is integer division: it returns a BIGINT, and
+every rate below 1 becomes 0.</p>
+<h2>Other ways to write it</h2>
+<p>Both give the same result as the reference solution:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">CASE</span><span class="w"> </span><span class="k">WHEN</span><span class="w"> </span><span class="n">impressions</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="n">clicks</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">impressions</span><span class="w"> </span><span class="k">END</span>
+<span class="n">try_divide</span><span class="p">(</span><span class="n">clicks</span><span class="p">,</span><span class="w"> </span><span class="n">impressions</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>try_divide</code> is Spark only; it does not exist in DuckDB, so it does not run in the
+browser editor. <code>NULLIF</code> works everywhere.</p>
+<h2>A note on PySpark</h2>
+<p>The DataFrame version has the same choice to make:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;clicks&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="n">F</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;impressions&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;impressions&quot;</span><span class="p">))</span>
+</code></pre></div>
+
+<p><code>when</code> without <code>otherwise</code> returns NULL, so this is <code>NULLIF</code> written in Python.
+<code>F.try_divide("clicks", "impressions")</code> also works.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Campaigns</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Never shown: 0 impressions, 0 clicks, 0 signups</td>
+<td>4</td>
+<td>Both rates NULL.</td>
+</tr>
+<tr>
+<td>Never shown, counts missing</td>
+<td>2</td>
+<td>Both rates NULL.</td>
+</tr>
+<tr>
+<td>Shown, never clicked</td>
+<td>5</td>
+<td><code>click_rate</code> 0, <code>signup_rate</code> NULL.</td>
+</tr>
+<tr>
+<td>Shown, click count missing</td>
+<td>4</td>
+<td>Both rates NULL, even though signups were recorded.</td>
+</tr>
+<tr>
+<td>Clicked, signup count missing</td>
+<td>5</td>
+<td><code>click_rate</code> is a number, <code>signup_rate</code> NULL.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../text-invoice-numbers/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">22. The invoice numbers that sort like words</span></a>
+      <a class="pager-link next" href="../monthly-active-users/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">24. Monthly active users are not the sum of the days</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

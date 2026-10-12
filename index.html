@@ -25,7 +25,7 @@
       } catch (error) { /* storage blocked: follow the system setting */ }
     })();
   </script>
-  <link rel="stylesheet" href="./static/style.css?v=0c508caeaf">
+  <link rel="stylesheet" href="./static/style.css?v=c2565df84a">
   <link rel="stylesheet" href="./static/code.css?v=4a7388524f">
   <script defer src="./static/progress.js?v=53e87820ee"></script>
   <script defer src="./static/site.js?v=28a35c4fbb"></script>
@@ -57,7 +57,7 @@
         your answer without giving it away.
       </p>
       <p class="hero-actions">
-        <a class="button" href="problems/">Browse all 20 problems</a>
+        <a class="button" href="problems/">Browse all 40 problems</a>
         <a class="button secondary" href="problems/latest-record-per-customer/#editor">Try one in the browser</a>
       </p>
       <p class="hero-note">Free. No sign-up. SQL problems run on this page; every problem runs in Google Colab.</p>
@@ -83,10 +83,10 @@ AVG(rating) <span class="kw">AS</span> avg_rating
 <section class="stats" aria-label="NullTrap in numbers">
   <div class="wrap">
     <dl>
-      <div><dt>practice problems</dt><dd>20</dd></div>
+      <div><dt>practice problems</dt><dd>40</dd></div>
       <div><dt>tracks: SQL, PySpark, Debug the AI</dt><dd>3</dd></div>
-      <div><dt>kinds of trap to practise</dt><dd>7</dd></div>
-      <div><dt>solvable right in the browser</dt><dd>10</dd></div>
+      <div><dt>kinds of trap to practise</dt><dd>8</dd></div>
+      <div><dt>solvable right in the browser</dt><dd>19</dd></div>
     </dl>
   </div>
 </section>
@@ -102,13 +102,14 @@ AVG(rating) <span class="kw">AS</span> avg_rating
       </p>
     </header>
     <div class="trap-grid">
-      <a class="trap-tile" href="problems/?trap=null"><span class="trap-head"><span class="trap-name">NULL trap</span><span class="trap-progress">6 problems</span></span><span class="trap-note">A comparison with NULL is never true, and never false either.</span></a>
-      <a class="trap-tile" href="problems/?trap=fan-out"><span class="trap-head"><span class="trap-name">Fan-out trap</span><span class="trap-progress">3 problems</span></span><span class="trap-note">A join or an explode repeats rows, and the sums grow.</span></a>
-      <a class="trap-tile" href="problems/?trap=tie"><span class="trap-head"><span class="trap-name">Tie trap</span><span class="trap-progress">4 problems</span></span><span class="trap-note">Two rows sort as equal, and which one wins is left to chance.</span></a>
-      <a class="trap-tile" href="problems/?trap=boundary"><span class="trap-head"><span class="trap-name">Boundary trap</span><span class="trap-progress">8 problems</span></span><span class="trap-note">The first day, the last second, the exact cut-off.</span></a>
-      <a class="trap-tile" href="problems/?trap=duplicate"><span class="trap-head"><span class="trap-name">Duplicate trap</span><span class="trap-progress">1 problem</span></span><span class="trap-note">The same row arrives twice.</span></a>
-      <a class="trap-tile" href="problems/?trap=late-data"><span class="trap-head"><span class="trap-name">Late-data trap</span><span class="trap-progress">2 problems</span></span><span class="trap-note">Data that turns up after you stopped looking for it.</span></a>
-      <a class="trap-tile" href="problems/?trap=schema"><span class="trap-head"><span class="trap-name">Schema trap</span><span class="trap-progress">1 problem</span></span><span class="trap-note">Columns that are not what their position suggests.</span></a>
+      <a class="trap-tile" href="problems/?trap=null"><span class="trap-head"><span class="trap-name">NULL trap</span><span class="trap-progress">13 problems</span></span><span class="trap-note">A comparison with NULL is never true, and never false either.</span></a>
+      <a class="trap-tile" href="problems/?trap=fan-out"><span class="trap-head"><span class="trap-name">Fan-out trap</span><span class="trap-progress">4 problems</span></span><span class="trap-note">A join or an explode repeats rows, and the sums grow.</span></a>
+      <a class="trap-tile" href="problems/?trap=tie"><span class="trap-head"><span class="trap-name">Tie trap</span><span class="trap-progress">5 problems</span></span><span class="trap-note">Two rows sort as equal, and which one wins is left to chance.</span></a>
+      <a class="trap-tile" href="problems/?trap=boundary"><span class="trap-head"><span class="trap-name">Boundary trap</span><span class="trap-progress">14 problems</span></span><span class="trap-note">The first day, the last second, the exact cut-off.</span></a>
+      <a class="trap-tile" href="problems/?trap=duplicate"><span class="trap-head"><span class="trap-name">Duplicate trap</span><span class="trap-progress">5 problems</span></span><span class="trap-note">The same row arrives twice.</span></a>
+      <a class="trap-tile" href="problems/?trap=late-data"><span class="trap-head"><span class="trap-name">Late-data trap</span><span class="trap-progress">3 problems</span></span><span class="trap-note">Data that turns up after you stopped looking for it.</span></a>
+      <a class="trap-tile" href="problems/?trap=schema"><span class="trap-head"><span class="trap-name">Schema trap</span><span class="trap-progress">4 problems</span></span><span class="trap-note">Columns that are not what their name, type or position suggests.</span></a>
+      <a class="trap-tile" href="problems/?trap=grain"><span class="trap-head"><span class="trap-name">Grain trap</span><span class="trap-progress">3 problems</span></span><span class="trap-note">A number worked out at one level and reused at another.</span></a>
     </div>
   </div>
 </section>
@@ -124,19 +125,19 @@ AVG(rating) <span class="kw">AS</span> avg_rating
         <span class="track-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg></span>
         <h3>SQL</h3>
         <p>One Spark SQL query per problem. Solve it on the page or in Colab. The place to start.</p>
-        <span class="track-meta">10 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="track-meta">19 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
       <a class="track-card track-pyspark" href="problems/?track=pyspark">
         <span class="track-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg></span>
         <h3>PySpark</h3>
         <p>The same kind of problem with the DataFrame API, the way production jobs are written.</p>
-        <span class="track-meta">5 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="track-meta">11 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
       <a class="track-card track-debug-the-ai" href="problems/?track=debug-the-ai">
         <span class="track-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8a3 3 0 0 1 6 0M7 11h10v4a5 5 0 0 1-10 0zM4 13h3M17 13h3M5 19l2.5-2M19 19l-2.5-2M5 7l2.5 2.5M19 7l-2.5 2.5"/></svg></span>
         <h3>Debug the AI</h3>
         <p>AI-written code that runs without errors and returns the wrong result. Find the bug and fix it.</p>
-        <span class="track-meta">5 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <span class="track-meta">10 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
     </div>
   </div>
@@ -212,12 +213,12 @@ AVG(rating) <span class="kw">AS</span> avg_rating
         <p class="overline">New</p>
         <h2>Latest problems</h2>
       </div>
-      <a class="text-link" href="problems/">See all 20 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="text-link" href="problems/">See all 40 problems <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </header>
     <div class="problem-grid">
-<article class="problem-card track-pyspark" data-slug="apply-changes-to-scd2" data-number="20" data-title="Apply a batch of changes to an SCD2 table" data-track="pyspark" data-difficulty="hard" data-trap="late-data"><p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge hard">Hard</span></p><h3><a href="./problems/apply-changes-to-scd2/">20. Apply a batch of changes to an SCD2 table</a></h3><p class="card-desc">Merge a batch of customer changes into a type 2 slowly changing dimension with PySpark. Close old versions, open new ones, skip saves that changed nothing, handle several changes for one customer, and ignore changes that arrive too late.</p><p class="card-foot"><span class="badge trap">Late-data trap</span><span class="tags">scd2 &middot; slowly changing dimension &middot; merge &middot; upsert &middot; late-arriving data</span></p></article>
-<article class="problem-card track-sql" data-slug="scd2-point-in-time-lookup" data-number="19" data-title="Which tier was the customer in when they ordered?" data-track="sql" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span></p><h3><a href="./problems/scd2-point-in-time-lookup/">19. Which tier was the customer in when they ordered?</a></h3><p class="card-desc">Join orders to a type 2 slowly changing dimension with Spark SQL so that each order gets the customer tier that was valid on the order date. BETWEEN duplicates orders on change days, and forgetting the open-ended current row loses recent ones.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">scd2 &middot; slowly changing dimension &middot; point-in-time join &middot; range join &middot; between</span></p></article>
-<article class="problem-card track-debug-the-ai" data-slug="join-on-nullable-key" data-number="18" data-title="The regions that sold nothing, according to the join" data-track="debug-the-ai" data-difficulty="medium" data-trap="null"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="./problems/join-on-nullable-key/">18. The regions that sold nothing, according to the join</a></h3><p class="card-desc">AI-written PySpark code compares regional sales with targets by joining on country and state. Regions whose state is NULL show zero sales, because NULL never equals NULL in a join. Find the bug and fix it.</p><p class="card-foot"><span class="badge trap">NULL trap</span><span class="tags">joins &middot; null keys &middot; eqNullSafe &middot; composite key</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="load-never-updates" data-number="40" data-title="The load that never updates anything" data-track="debug-the-ai" data-difficulty="medium" data-trap="late-data duplicate"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="./problems/load-never-updates/">40. The load that never updates anything</a></h3><p class="card-desc">AI-written PySpark code applies a batch of orders to a target table with a left anti join. New orders arrive, the row count is right, and every changed order keeps its old status. Find the bug and write the load properly.</p><p class="card-foot"><span class="badge trap">Late-data trap</span><span class="badge trap">Duplicate trap</span><span class="tags">upsert &middot; merge &middot; incremental load &middot; left anti join &middot; deduplication</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="rolling-seven-days" data-number="39" data-title="Seven rows are not seven days" data-track="debug-the-ai" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="./problems/rolling-seven-days/">39. Seven rows are not seven days</a></h3><p class="card-desc">AI-written PySpark code computes rolling 7-day revenue per store with rowsBetween(-6, 0). Stores that are closed on some days get a window that reaches back much further than a week. Find the frame bug and fix it.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">window functions &middot; rolling sum &middot; rowsBetween &middot; rangeBetween &middot; missing days</span></p></article>
+<article class="problem-card track-debug-the-ai" data-slug="between-on-timestamps" data-number="38" data-title="The month that ends a day early" data-track="debug-the-ai" data-difficulty="medium" data-trap="boundary"><p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span></p><h3><a href="./problems/between-on-timestamps/">38. The month that ends a day early</a></h3><p class="card-desc">An AI-written Spark SQL query totals March payments per day with BETWEEN on a timestamp column. Every day is right except the last one. Find the date range bug and fix it.</p><p class="card-foot"><span class="badge trap">Boundary trap</span><span class="tags">between &middot; timestamps &middot; date range &middot; half-open interval &middot; month end</span></p></article>
     </div>
   </div>
 </section>

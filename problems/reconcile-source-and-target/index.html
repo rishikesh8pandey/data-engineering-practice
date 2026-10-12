@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reconcile a target table against its source | PySpark problem | NullTrap</title>
+  <meta name="description" content="Compare a loaded customer table with its source using PySpark and report missing, extra, duplicated and mismatched rows. Row counts can match while the content does not, and a plain != never flags a value that turned into NULL.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/reconcile-source-and-target/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Reconcile a target table against its source | PySpark problem | NullTrap">
+  <meta property="og:description" content="Compare a loaded customer table with its source using PySpark and report missing, extra, duplicated and mismatched rows. Row counts can match while the content does not, and a plain != never flags a value that turned into NULL.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/reconcile-source-and-target/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 34</span>
+    </nav>
+    <h1>34. Reconcile a target table against its source</h1>
+    <p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge hard">Hard</span><span class="badge trap">NULL trap</span><span class="badge trap">Duplicate trap</span></p>
+    <p class="tags">reconciliation &middot; data validation &middot; full outer join &middot; null-safe comparison &middot; eqNullSafe</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/034-reconcile-source-and-target.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="reconcile-source-and-target" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>A nightly job copies customers from the source system into the warehouse. The only
+check on it compares row counts, and the counts are close enough that nobody looks
+further.</p>
+<p>Finance has found a customer whose credit limit in the warehouse is not the one in
+the source. You are asked for a proper reconciliation: every customer where the two
+tables disagree, and how.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="source_customers"><code>source_customers</code></h3>
+<p>One row per customer. <code>customer_id</code> is unique and never NULL.</p>
+<h3 id="target_customers"><code>target_customers</code></h3>
+<p>The loaded copy. <code>customer_id</code> is never NULL, but it is not guaranteed to be unique.</p>
+<p>Both tables have the same columns:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td>The key.</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>STRING</td>
+<td>Can be NULL.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>Can be NULL.</td>
+</tr>
+<tr>
+<td><code>credit_limit</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Can be NULL.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row for every <code>customer_id</code> that has a problem. A customer with no
+problem does not appear. Check in this order and report the first that applies:</p>
+<ol>
+<li><code>MISSING_IN_TARGET</code>: the id is in the source and not in the target.</li>
+<li><code>MISSING_IN_SOURCE</code>: the id is in the target and not in the source.</li>
+<li><code>DUPLICATE_IN_TARGET</code>: the id is in the source, and has more than one row in the
+   target. The column values are not compared for these.</li>
+<li><code>MISMATCH</code>: the id has one row on each side and at least one of <code>email</code>, <code>city</code>,
+   <code>credit_limit</code> differs.</li>
+</ol>
+<p>Comparing values:</p>
+<ul>
+<li>Values are compared exactly. <code>Pune</code> and <code>pune</code> are different.</li>
+<li>NULL on both sides is a match. NULL on one side and a value on the other is a
+  difference.</li>
+</ul>
+<p><code>mismatched_columns</code> lists the columns that differ, separated by commas with no
+spaces, always in the order <code>email</code>, <code>city</code>, <code>credit_limit</code>. For example
+<code>email,credit_limit</code>. It is NULL for every issue other than <code>MISMATCH</code>.</p>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per customer with a problem.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customer_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>issue</code></td>
+<td>STRING</td>
+<td>One of the four values above.</td>
+</tr>
+<tr>
+<td><code>mismatched_columns</code></td>
+<td>STRING</td>
+<td>Only for <code>MISMATCH</code>, otherwise NULL.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>A reconciliation has to answer three questions, and a row count answers none of
+them: is every key there, is every key there once, and do the values agree?</p>
+<p><strong>1. Count the target rows per key.</strong> A window count on the target marks the
+duplicated ids before anything is joined:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;customer_id&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;target_rows&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>2. Full outer join on the key.</strong> A left join only sees what is missing from the
+target. An inner join sees neither side's missing rows. Only a full outer join keeps
+both. Each side brings a marker column (<code>in_source</code>, <code>in_target</code>) that is NULL when
+that side had no row.</p>
+<p><strong>3. Compare the columns with a null-safe comparison.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="o">~</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;s_email&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">eqNullSafe</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;t_email&quot;</span><span class="p">))</span>
+</code></pre></div>
+
+<p><code>eqNullSafe</code> (<code>&lt;=&gt;</code> in SQL) returns true for NULL and NULL, and false for NULL and a
+value. It never returns NULL. With <code>!=</code>, both of those comparisons are NULL, and a
+NULL condition counts as "no difference".</p>
+<p><strong>4. Build the list of differing columns.</strong> <code>concat_ws</code> skips NULLs, so one
+<code>when(differs, "name")</code> per column, joined with commas, gives exactly the columns
+that differ, in a fixed order, and an empty string when none does.</p>
+<p><strong>5. Label in the order the statement gives</strong>, with one <code>when</code> chain, then
+<code>distinct()</code>: a duplicated customer has two joined rows that carry the same label.</p>
+<p>The source has 150 rows and the target 152. The result has 35 rows: 6 missing in
+the target, 4 missing in the source, 4 duplicated, 21 mismatched.</p>
+<h2>Why the row counts were "close enough"</h2>
+<p>150 against 152 looks like two extra rows. What actually happened is 6 rows missing,
+4 extra and 4 loaded twice: 150 − 6 + 4 + 4 = 152. Errors in opposite directions
+cancel. And a count says nothing at all about the 21 customers whose row is there
+with the wrong content.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Comparing with <code>!=</code>.</strong> 8 of the 21 mismatches have a value on one side and NULL
+on the other: an email that was lost, a credit limit that appeared from nowhere.
+<code>!=</code> cannot see them. 5 mismatched customers are not reported at all, and 3 more
+are reported with an incomplete column list. These are usually the most interesting
+differences, because "value became NULL" is what a broken load looks like.</p>
+<p><strong><code>a != b OR a IS NULL OR b IS NULL</code>.</strong> The usual first repair, and it overshoots.
+NULL on both sides is now reported as a difference. 28 customers who are fine are
+flagged, and the report has 49 mismatches instead of 21. A reconciliation that cries
+wolf gets ignored.</p>
+<p><strong>A left join from the source.</strong> Finds nothing that exists only in the target. 31
+rows; the 4 <code>MISSING_IN_SOURCE</code> customers are gone. Rows in a target that are not in
+the source are often the serious ones: test data, or rows that were deleted upstream
+and never removed.</p>
+<p><strong>An inner join.</strong> 25 rows. Neither kind of missing row can appear.</p>
+<p><strong>No rule for duplicates.</strong> Two of the duplicated customers were loaded as exact
+copies. Both joined rows match the source, so they produce no issue and the
+duplication is invisible to a column comparison. The other two have a second copy
+with a different city, and are reported as a <code>city</code> mismatch, which sends whoever
+reads the report looking for the wrong problem. Check uniqueness of the key as its
+own step.</p>
+<p><strong>No <code>distinct()</code>.</strong> Each duplicated customer is reported twice. 39 rows.</p>
+<h2>Other ways to do it</h2>
+<p><strong><code>IS DISTINCT FROM</code></strong> is the SQL-standard spelling of the null-safe "not equal",
+and gives the same result as <code>NOT (a &lt;=&gt; b)</code>.</p>
+<p><strong><code>coalesce</code> to a sentinel</strong>, as in <code>coalesce(s.city, '') != coalesce(t.city, '')</code>.
+This passes on this data. It breaks the day a real value equals the sentinel: an
+empty string that is a real value, a credit limit that really is 0 or −1. The
+null-safe operator has no such case.</p>
+<p><strong><code>exceptAll</code></strong>. <code>source.exceptAll(target)</code> returns 27 rows and
+<code>target.exceptAll(source)</code> returns 29. That is a fast and correct way to answer "do
+the tables differ?", and it handles NULLs and duplicates properly. It does not tell
+you which key is missing, which is duplicated, or which column differs. Use it as
+the alarm and the join as the diagnosis.</p>
+<p><strong>Row hashes.</strong> Comparing one hash per row is common on wide tables. Be careful how
+the hash input is built: <code>concat_ws('|', 'a', NULL, 'b')</code> and
+<code>concat_ws('|', 'a', 'b', NULL)</code> are the same string, <code>a|b</code>, because <code>concat_ws</code>
+skips NULLs. Two different rows get the same hash. Replace NULLs with a marker
+inside the hash input, or use a hash function that takes the columns separately.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Value on one side, NULL on the other</td>
+<td>8 of the 21 mismatches</td>
+<td><code>!=</code>.</td>
+</tr>
+<tr>
+<td>NULL in the same column on both sides</td>
+<td>28 customers with no issue</td>
+<td>"Different or either is NULL".</td>
+</tr>
+<tr>
+<td>Ids only in the target</td>
+<td>2001 to 2004</td>
+<td>Left join, inner join.</td>
+</tr>
+<tr>
+<td>Ids only in the source</td>
+<td>6 customers</td>
+<td>Inner join.</td>
+</tr>
+<tr>
+<td>Loaded twice, identical</td>
+<td>2 customers</td>
+<td>Comparing columns without checking the key.</td>
+</tr>
+<tr>
+<td>Loaded twice, second copy differs</td>
+<td>2 customers</td>
+<td>Reporting a duplicate as a mismatch.</td>
+</tr>
+<tr>
+<td>Two or three columns differ</td>
+<td>6 customers</td>
+<td>The order and format of <code>mismatched_columns</code>.</td>
+</tr>
+<tr>
+<td>Emails that differ only in case</td>
+<td>2 customers</td>
+<td>Case-insensitive comparison.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../cumulative-unique-customers/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">33. Customers to date, counted once</span></a>
+      <a class="pager-link next" href="../golden-customer-record/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">35. One golden record from three systems</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

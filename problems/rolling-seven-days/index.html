@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seven rows are not seven days | Debug the AI problem | NullTrap</title>
+  <meta name="description" content="AI-written PySpark code computes rolling 7-day revenue per store with rowsBetween(-6, 0). Stores that are closed on some days get a window that reaches back much further than a week. Find the frame bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/rolling-seven-days/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Seven rows are not seven days | Debug the AI problem | NullTrap">
+  <meta property="og:description" content="AI-written PySpark code computes rolling 7-day revenue per store with rowsBetween(-6, 0). Stores that are closed on some days get a window that reaches back much further than a week. Find the frame bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/rolling-seven-days/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 39</span>
+    </nav>
+    <h1>39. Seven rows are not seven days</h1>
+    <p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">Boundary trap</span></p>
+    <p class="tags">window functions &middot; rolling sum &middot; rowsBetween &middot; rangeBetween &middot; missing days</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/039-rolling-seven-days.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="rolling-seven-days" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>Store managers get a rolling 7-day revenue number every morning. An AI assistant
+wrote the job in the answer cell. It was tested on the flagship store, which is open
+every day, and every number was right.</p>
+<p>The manager of a store that opens only at weekends then reported that her "7-day"
+revenue was larger than everything the store had sold in the last three weeks.</p>
+<p>Find the bug and fix it.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="daily_sales"><code>daily_sales</code></h3>
+<p>One row per store per day <strong>on which the store sold something</strong>. A day the store was
+closed has no row.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td>The store.</td>
+</tr>
+<tr>
+<td><code>sale_date</code></td>
+<td>DATE</td>
+<td>The day. Unique per store.</td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(10,2)</td>
+<td>The store's revenue that day. Never NULL.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return every row of <code>daily_sales</code> with the store's rolling 7-day revenue.</p>
+<ul>
+<li><code>rolling_7d_revenue</code> is the sum of the store's <code>revenue</code> over the 7 calendar days
+  ending on <code>sale_date</code>: from <code>sale_date</code> minus 6 days up to and including
+  <code>sale_date</code>.</li>
+<li>A day without a row adds nothing. It still counts as one of the 7 days.</li>
+<li>No rows are added for the missing days.</li>
+</ul>
+<p>Example: a store sold on 1 April, 2 April and 10 April. For 10 April the window is
+4 April to 10 April, so the rolling revenue is the revenue of 10 April alone.</p>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per row of <code>daily_sales</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>sale_date</code></td>
+<td>DATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>revenue</code></td>
+<td>DECIMAL(10,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>rolling_7d_revenue</code></td>
+<td>DECIMAL(14,2)</td>
+<td>Revenue of the 7 calendar days ending on <code>sale_date</code>.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+<section class="prose">
+<h2 id="ai-code">The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">Window</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyspark.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">F</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Rolling 7-day revenue per store.&quot;&quot;&quot;</span>
+    <span class="n">sales</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;daily_sales&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Window over the current day and the six days before it</span>
+    <span class="n">last_7_days</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;store_id&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="s2">&quot;sale_date&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">rowsBetween</span><span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">sales</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="s2">&quot;store_id&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sale_date&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;revenue&quot;</span><span class="p">,</span>
+        <span class="n">F</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="s2">&quot;revenue&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">last_7_days</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;decimal(14,2)&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;rolling_7d_revenue&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">last_7_days</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;store_id&quot;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="s2">&quot;sale_date&quot;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">rowsBetween</span><span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><code>rowsBetween(-6, 0)</code> means "this row and the six rows before it". It counts
+<strong>rows</strong>. It never looks at the dates in them. The comment above it says "the
+current day and the six days before it", and that is only the same thing if there
+is exactly one row for every calendar day.</p>
+<p><code>daily_sales</code> has a row only for days with sales. For a store that was closed on
+some days, six rows back is further than six days back.</p>
+<p>Store 8 opens at weekends only:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>sale_date</th>
+<th>revenue</th>
+<th>Correct 7-day revenue</th>
+<th>The buggy job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5 April</td>
+<td>15,024.00</td>
+<td>15,024.00</td>
+<td>15,024.00</td>
+</tr>
+<tr>
+<td>6 April</td>
+<td>31,292.50</td>
+<td>46,316.50</td>
+<td>46,316.50</td>
+</tr>
+<tr>
+<td>12 April</td>
+<td>25,546.00</td>
+<td>56,838.50</td>
+<td>71,862.50</td>
+</tr>
+<tr>
+<td>13 April</td>
+<td>15,242.00</td>
+<td>40,788.00</td>
+<td>87,104.50</td>
+</tr>
+<tr>
+<td>19 April</td>
+<td>33,507.50</td>
+<td>48,749.50</td>
+<td>120,612.00</td>
+</tr>
+<tr>
+<td>20 April</td>
+<td>24,994.00</td>
+<td>58,501.50</td>
+<td>145,606.00</td>
+</tr>
+<tr>
+<td>26 April</td>
+<td>22,867.50</td>
+<td>47,861.50</td>
+<td>168,473.50</td>
+</tr>
+<tr>
+<td>27 April</td>
+<td>31,828.00</td>
+<td>54,695.50</td>
+<td>185,277.50</td>
+</tr>
+</tbody>
+</table></div>
+<p>By 27 April the "7-day" number is the sum of seven rows that reach back to 6 April,
+three weeks earlier.</p>
+<p>Wrong rows per store, out of 268 rows in total:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Store</th>
+<th>Rows</th>
+<th>Wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1, open every day</td>
+<td>45</td>
+<td>0</td>
+</tr>
+<tr>
+<td>2 to 6, closed on Sundays and a few other days</td>
+<td>176</td>
+<td>148</td>
+</tr>
+<tr>
+<td>7, shut for ten days</td>
+<td>35</td>
+<td>6</td>
+</tr>
+<tr>
+<td>8, weekends only</td>
+<td>12</td>
+<td>10</td>
+</tr>
+</tbody>
+</table></div>
+<p>Why it got through: it was tested on store 1. With no missing days, seven rows and
+seven days are the same and every number is right. Store 7 is nearly right as well:
+only the six rows after its ten-day closure are wrong.</p>
+<h2>The fix</h2>
+<p>Use a <strong>range</strong> frame. A range frame is defined by the value of the <code>orderBy</code>
+expression, not by row positions: "all rows whose value is between the current
+value minus 6 and the current value".</p>
+<div class="codehilite"><pre><span></span><code><span class="n">last_7_days</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;store_id&quot;</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">unix_date</span><span class="p">(</span><span class="s2">&quot;sale_date&quot;</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">rangeBetween</span><span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><code>F.unix_date</code> turns the date into a day number (days since 1970-01-01), so that
+"minus 6" means six days. A missing day simply has no row in the range.</p>
+<p>In SQL the frame can be written on the date itself:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SUM</span><span class="p">(</span><span class="n">revenue</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">store_id</span>
+<span class="w">    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">sale_date</span>
+<span class="w">    </span><span class="n">RANGE</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="mi">6</span><span class="w"> </span><span class="n">DAYS</span><span class="w"> </span><span class="n">PRECEDING</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">CURRENT</span><span class="w"> </span><span class="k">ROW</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h2>Common wrong answers</h2>
+<p><strong><code>orderBy("sale_date").rangeBetween(-6, 0)</code>.</strong> The natural first fix, and Spark
+rejects it:</p>
+<div class="codehilite"><pre><span></span><code>[DATATYPE_MISMATCH.RANGE_FRAME_INVALID_TYPE] ... The data type &quot;DATE&quot; used in the
+order specification does not support the data type &quot;BIGINT&quot; which is used in the
+range frame.
+</code></pre></div>
+
+<p>PySpark sends the frame bounds as 64-bit integers, and a DATE cannot be offset by
+one. Order by a number instead: <code>F.unix_date("sale_date")</code>, or
+<code>F.datediff("sale_date", F.lit("2025-01-01"))</code>.</p>
+<p><strong><code>rangeBetween(-7, 0)</code>.</strong> Seven days back plus today is eight days. 201 of the 268
+rows are wrong. The window is inclusive at both ends, so seven days is <code>-6</code>.</p>
+<p><strong>Dropping <code>partitionBy("store_id")</code>.</strong> Sums the revenue of all stores in the date
+range. Every row is wrong.</p>
+<p><strong>Leaving out the cast.</strong> <code>sum</code> of a <code>DECIMAL(10,2)</code> is a <code>DECIMAL(20,2)</code>. The
+values are right and the check reports the type.</p>
+<h2>Other correct ways</h2>
+<p><strong>Order by seconds.</strong> <code>orderBy(F.unix_timestamp(F.col("sale_date").cast("timestamp")))</code>
+with <code>rangeBetween(-6 * 86400, 0)</code>. This is the form you need when the column is a
+timestamp and the window is "the last 24 hours".</p>
+<p><strong>Fill in the missing days first.</strong> Build one row per store and calendar day, with
+NULL revenue on closed days, and then <code>rowsBetween(-6, 0)</code> is correct, because now
+seven rows really are seven days. Remove the filler rows at the end. More steps, and
+often what the report needs anyway: a chart of rolling revenue should usually show
+the closed days too.</p>
+<p><strong>A self-join</strong> on <code>b.sale_date BETWEEN DATE_SUB(a.sale_date, 6) AND a.sale_date</code>. Correct,
+and much more work for the engine than a window.</p>
+<h2>How to choose between rows and range</h2>
+<ul>
+<li><strong>Rows</strong> when you mean a number of records: the last 3 orders, the previous
+  reading.</li>
+<li><strong>Range</strong> when you mean a distance in the ordering value: the last 7 days, the
+  last 30 minutes, within 100 rupees.</li>
+</ul>
+<p>A rolling time window is a distance. Reach for <code>rowsBetween</code> only when you have made
+sure, in the same job, that there is one row per time step.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No missing days</td>
+<td>store 1</td>
+<td>Rows and range agree; the bug is invisible.</td>
+</tr>
+<tr>
+<td>Closed on Sundays, plus a few random days</td>
+<td>stores 2 to 6</td>
+<td>Most rows are wrong: seven rows reach back eight days or more.</td>
+</tr>
+<tr>
+<td>A gap of ten days</td>
+<td>store 7</td>
+<td>The first row after the gap must equal that day's revenue alone.</td>
+</tr>
+<tr>
+<td>Open two days a week</td>
+<td>store 8</td>
+<td>Seven rows span more than three weeks.</td>
+</tr>
+<tr>
+<td>The first rows of every store</td>
+<td>all</td>
+<td>Fewer than seven days of history: the sum of what there is.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../between-on-timestamps/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">38. The month that ends a day early</span></a>
+      <a class="pager-link next" href="../load-never-updates/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">40. The load that never updates anything</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#ai-code">The AI-written code</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

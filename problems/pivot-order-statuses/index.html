@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order statuses as columns, with zeros where there are none | SQL problem | NullTrap</title>
+  <meta name="description" content="Turn order rows into one row per store with a column per status in Spark SQL. Covers conditional aggregation, 0 versus NULL for empty groups, and statuses that are missing or unexpected.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/pivot-order-statuses/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Order statuses as columns, with zeros where there are none | SQL problem | NullTrap">
+  <meta property="og:description" content="Turn order rows into one row per store with a column per status in Spark SQL. Covers conditional aggregation, 0 versus NULL for empty groups, and statuses that are missing or unexpected.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/pivot-order-statuses/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 21</span>
+    </nav>
+    <h1>21. Order statuses as columns, with zeros where there are none</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge easy">Easy</span><span class="badge trap">NULL trap</span></p>
+    <p class="tags">pivot &middot; conditional aggregation &middot; case when &middot; nulls</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/021-pivot-order-statuses.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="pivot-order-statuses" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>The operations team reads a daily sheet with one row per store and one column per
+order status. The orders table has it the other way round: one row per order, with
+the status in a column.</p>
+<p>The first version of the query left blanks in the sheet for stores that had no
+returns, and its columns did not add up to the number of orders.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="orders"><code>orders</code></h3>
+<p>One row per order.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td>The store that took the order.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>STRING</td>
+<td>Normally <code>DELIVERED</code>, <code>CANCELLED</code> or <code>RETURNED</code>. Can be NULL, and can be something else.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>Order value in rupees.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row per store.</p>
+<ul>
+<li><code>delivered_orders</code>, <code>cancelled_orders</code> and <code>returned_orders</code> count the orders whose
+  status is exactly <code>DELIVERED</code>, <code>CANCELLED</code> or <code>RETURNED</code>.</li>
+<li><code>other_orders</code> counts every other order: a NULL status, and any status that is not
+  one of those three exact values (<code>delivered</code> in lowercase is one of these).</li>
+<li>The four counts of a store add up to its number of orders.</li>
+<li><code>delivered_amount</code> is the total amount of the store's <code>DELIVERED</code> orders.</li>
+<li>A store with no orders of a kind shows 0 in that column, and 0.00 for the amount.
+  Never NULL.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per store.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>delivered_orders</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>cancelled_orders</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>returned_orders</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>other_orders</code></td>
+<td>BIGINT</td>
+<td>NULL and unrecognised statuses.</td>
+</tr>
+<tr>
+<td><code>delivered_amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>0.00 if the store has no delivered orders.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+<section id="editor" class="editor">
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. The <code>PIVOT</code> clause behaves differently here: DuckDB fills a missing combination with 0, Spark leaves it NULL. Conditional counts give the same result in both.
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
+  <script type="application/json" id="editor-config">{"slug": "pivot-order-statuses", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "orders", "url": "../../data/021-pivot-order-statuses/orders.parquet"}], "starter": "-- Tables: orders\nSELECT *\nFROM orders\nLIMIT 10", "expected": {"columns": ["cancelled_orders", "delivered_amount", "delivered_orders", "other_orders", "returned_orders", "store_id"], "row_count": 12, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"cancelled_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"delivered_amount\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"delivered_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"other_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"returned_orders\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "7a1dc58a12bddbac10d58493171a466c1a07fc6af5dada5bb61810387056cbc4", "column_checks": [{"name": "cancelled_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"cancelled_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "cd23b7e4f44a4c4ceaf50b32ef83736b9228bd1a5f3c7b92d1942e40a0ac7afb"}, {"name": "delivered_amount", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"delivered_amount\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "14cb7d68ba2cc881c9d87020a26f637d5206ca4ad457bbe81e3406da7f1984a8"}, {"name": "delivered_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"delivered_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "ddd2eb5d10742339417c5b95bb8d8801a505f8e57fb74aa3c59ba1feb76bf531"}, {"name": "other_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"other_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "b94d3a4786c221cc9da69431e79a992cc7eb7bdc729ef4ce758f41cef2ad5edd"}, {"name": "returned_orders", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"returned_orders\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "620c3df684794fb8d0d69bc57327e69e2c5fa56154b1fc3f0faac722f71ef166"}, {"name": "store_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"store_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "5c9a1803f5b13f3f7b25fc0e88e484859f1b53ac547ff0f6594f61588ef22779"}]}}</script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>Turning rows into columns is one aggregate per output column, each looking at only
+the rows it cares about:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">COUNT</span><span class="p">(</span><span class="k">CASE</span><span class="w"> </span><span class="k">WHEN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;DELIVERED&#39;</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">END</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">delivered_orders</span>
+</code></pre></div>
+
+<p>The <code>CASE</code> returns 1 for a delivered order and NULL for anything else, because a
+<code>CASE</code> with no <code>ELSE</code> returns NULL. <code>COUNT(expression)</code> counts the rows where the
+expression is not NULL. So this counts the delivered orders, and when a store has
+none it counts zero rows and returns 0. That is the whole trick, and it is why
+<code>COUNT</code> is the right aggregate here and <code>SUM</code> is not.</p>
+<p>Two columns need more care.</p>
+<p><strong><code>other_orders</code></strong> has to catch every status that is not one of the three, and a
+missing status is one of them:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">COUNT</span><span class="p">(</span><span class="k">CASE</span><span class="w"> </span><span class="k">WHEN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+<span class="w">            </span><span class="k">OR</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;DELIVERED&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;CANCELLED&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;RETURNED&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">THEN</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">END</span><span class="p">)</span>
+</code></pre></div>
+
+<p><code>NULL NOT IN (...)</code> is NULL, not true. Without the <code>IS NULL</code> the orders with no
+status are in none of the four columns.</p>
+<p><strong><code>delivered_amount</code></strong> is a <code>SUM</code>, and <code>SUM</code> over no rows is NULL, so it is wrapped
+in <code>COALESCE(..., 0)</code>.</p>
+<p>The table has 214 orders in 12 stores: 137 <code>DELIVERED</code>, 34 <code>CANCELLED</code>, 16
+<code>RETURNED</code>, 13 <code>PENDING</code>, 10 with no status and 4 written as <code>delivered</code>.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>SUM(CASE WHEN status = 'RETURNED' THEN 1 END)</code>.</strong> Fine for a store that has
+returns. For a store that has none, every <code>CASE</code> result is NULL and <code>SUM</code> of nothing
+but NULLs is NULL. Six of the 12 stores get a NULL somewhere: four have no returns,
+two have no cancellations and one has no deliveries. These are the blanks in the
+sheet. <code>SUM(CASE WHEN ... THEN 1 ELSE 0 END)</code> fixes it; <code>COUNT</code> without the <code>ELSE</code>
+is shorter.</p>
+<p><strong><code>COUNT(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END)</code>.</strong> The opposite mistake.
+<code>COUNT</code> counts 0 just as happily as 1, so this counts every order. It is wrong for
+11 of the 12 stores, and right for store 12 only because all of its orders were
+delivered.</p>
+<p><strong><code>status NOT IN (...)</code> without <code>IS NULL</code>.</strong> <code>other_orders</code> is too low for 8 stores,
+the ones with at least one order that has no status. The four columns no longer add
+up to the number of orders, which is the second complaint in the story.</p>
+<p><strong>No <code>COALESCE</code> on the amount.</strong> Store 11 has no delivered orders and shows NULL
+instead of 0.00.</p>
+<p><strong><code>UPPER(status) = 'DELIVERED'</code>.</strong> Counts the four <code>delivered</code> rows as delivered.
+The requirement says exactly <code>DELIVERED</code>. Whether lowercase is the same status is a
+question for whoever owns the data; quietly normalising it in a report hides the
+data entry problem. Wrong for 4 stores.</p>
+<p><strong>The <code>PIVOT</code> clause.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">store_id</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span><span class="p">)</span>
+<span class="n">PIVOT</span><span class="w"> </span><span class="p">(</span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="s1">&#39;DELIVERED&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;CANCELLED&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;RETURNED&#39;</span><span class="p">))</span>
+</code></pre></div>
+
+<p>In Spark this returns NULL, not 0, where a store has no orders of a kind, even
+though the aggregate is a count. A missing combination has no group at all, so
+there is nothing to count. It also has no column for the other statuses:
+<code>PENDING</code>, <code>delivered</code> and whatever turns up next would each need their own entry
+in the list. <code>PIVOT</code> is useful when the list of values is long; for three known
+values the conditional counts are clearer and safer.</p>
+<h2>Other ways to write it</h2>
+<p>All of these give the same result as the reference solution:</p>
+<ul>
+<li><code>COUNT_IF(status = 'RETURNED')</code></li>
+<li><code>COUNT(*) FILTER (WHERE status = 'RETURNED')</code></li>
+<li><code>other_orders</code> as <code>COUNT(*)</code> minus the count of the three known statuses. This
+  cannot miss a row, whatever turns up in the column.</li>
+</ul>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Store with no delivered orders</td>
+<td>store 11</td>
+<td><code>SUM</code> without <code>ELSE</code>; amount without <code>COALESCE</code>.</td>
+</tr>
+<tr>
+<td>Store with only delivered orders</td>
+<td>store 12</td>
+<td>NULLs in three count columns at once; makes <code>COUNT(... ELSE 0)</code> look right.</td>
+</tr>
+<tr>
+<td>Stores with no returns or no cancellations</td>
+<td>1, 5, 7, 8, 12</td>
+<td>The same, in ordinary stores.</td>
+</tr>
+<tr>
+<td>Orders with no status</td>
+<td>10 orders in 8 stores</td>
+<td><code>NOT IN</code> without <code>IS NULL</code>.</td>
+</tr>
+<tr>
+<td><code>PENDING</code></td>
+<td>13 orders</td>
+<td>A status the report does not know must land in <code>other_orders</code>.</td>
+</tr>
+<tr>
+<td><code>delivered</code> in lowercase</td>
+<td>4 orders in 4 stores</td>
+<td>Case-insensitive matching.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../apply-changes-to-scd2/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">20. Apply a batch of changes to an SCD2 table</span></a>
+      <a class="pager-link next" href="../text-invoice-numbers/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">22. The invoice numbers that sort like words</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

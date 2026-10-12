@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The load that never updates anything | Debug the AI problem | NullTrap</title>
+  <meta name="description" content="AI-written PySpark code applies a batch of orders to a target table with a left anti join. New orders arrive, the row count is right, and every changed order keeps its old status. Find the bug and write the load properly.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/load-never-updates/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The load that never updates anything | Debug the AI problem | NullTrap">
+  <meta property="og:description" content="AI-written PySpark code applies a batch of orders to a target table with a left anti join. New orders arrive, the row count is right, and every changed order keeps its old status. Find the bug and write the load properly.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/load-never-updates/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 40</span>
+    </nav>
+    <h1>40. The load that never updates anything</h1>
+    <p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge medium">Medium</span><span class="badge trap">Late-data trap</span><span class="badge trap">Duplicate trap</span></p>
+    <p class="tags">upsert &middot; merge &middot; incremental load &middot; left anti join &middot; deduplication</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/040-load-never-updates.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="load-never-updates" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>The orders table is refreshed from batches sent by the order system. A batch contains
+every order that was created or changed since the previous one.</p>
+<p>An AI assistant wrote the load in the answer cell. It has run for a week. The row
+count after each load is exactly what the order system reports, so the check passes.
+Customer support now says that orders delivered days ago still show as <code>PLACED</code>.</p>
+<p>Find the bug and fix it.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="target_orders"><code>target_orders</code></h3>
+<p>The table as it is before the load. One row per order.</p>
+<h3 id="batch_orders"><code>batch_orders</code></h3>
+<p>The incoming batch. It can contain new orders, newer versions of orders the target
+already has, the same order more than once, a row the target already has (the order
+system re-sends on a timeout), and a version that is <strong>older</strong> than what the target
+has (a delayed message).</p>
+<p>Both tables have the same columns:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>The order. Never NULL.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>STRING</td>
+<td><code>PLACED</code>, <code>PACKED</code>, <code>SHIPPED</code>, <code>DELIVERED</code> or <code>CANCELLED</code>.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>The order value. It can change between versions.</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When this version of the order was saved.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Two versions of an order with the same <code>updated_at</code> are identical in every column.</p>
+<h2 id="requirement">Requirement</h2>
+<p>Return the orders table as it should be after the load.</p>
+<ul>
+<li>One row per <code>order_id</code> found in either table.</li>
+<li>For each order, keep the version with the latest <code>updated_at</code>, whichever table it
+  is in. A batch row that is older than the target's row changes nothing.</li>
+<li>All four columns come from that one version.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per order.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+<section class="prose">
+<h2 id="ai-code">The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">spark</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the incoming batch to the orders table.&quot;&quot;&quot;</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;target_orders&quot;</span><span class="p">)</span>
+    <span class="n">batch</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">&quot;batch_orders&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Orders in the batch that the target does not have yet</span>
+    <span class="n">new_orders</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;order_id&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left_anti&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Add them to the existing orders</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">unionByName</span><span class="p">(</span><span class="n">new_orders</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">new_orders</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;order_id&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left_anti&quot;</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">unionByName</span><span class="p">(</span><span class="n">new_orders</span><span class="p">)</span>
+</code></pre></div>
+
+<p>A left anti join keeps the rows of the left table that have <strong>no</strong> match in the
+right table. So <code>new_orders</code> is the batch rows whose <code>order_id</code> is not in the target
+yet. Those are appended.</p>
+<p>Every batch row whose <code>order_id</code> <em>is</em> already in the target is thrown away by that
+same join. That includes every update. The load inserts and never updates.</p>
+<p>The batch has 69 rows for 64 orders. 20 orders are new. The other 44 already exist,
+and 23 of them have a newer version in the batch. All 23 keep their old row: 22
+have the wrong status and 5 the wrong amount.</p>
+<p>Why it got through:</p>
+<ul>
+<li>The row count is right. 100 existing orders plus 20 new ones is 120, which is
+  what the order system reports. An insert-only load and a correct upsert produce
+  the same number of rows.</li>
+<li>On the first run against an empty table, everything is "new", so the output is
+  perfect.</li>
+<li>New orders do arrive, so the table visibly changes after every load.</li>
+</ul>
+<p>A row count tells you about inserts. It cannot tell you anything about updates.</p>
+<h2>The fix</h2>
+<p>Stop thinking of "the target" and "the batch" as different kinds of thing. Both are
+piles of order versions. Put them together and keep the latest version of each
+order:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">all_versions</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">unionByName</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+<span class="n">latest_first</span> <span class="o">=</span> <span class="n">Window</span><span class="o">.</span><span class="n">partitionBy</span><span class="p">(</span><span class="s2">&quot;order_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">orderBy</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;updated_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">desc</span><span class="p">())</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">all_versions</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s2">&quot;version_rank&quot;</span><span class="p">,</span> <span class="n">F</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">latest_first</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;version_rank&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="s2">&quot;version_rank&quot;</span><span class="p">)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>One rule covers every case in the batch:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>In the batch</th>
+<th>Rows</th>
+<th>What the rule does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A new order</td>
+<td>20</td>
+<td>Its only version wins.</td>
+</tr>
+<tr>
+<td>A copy of a row the target already has</td>
+<td>15</td>
+<td>A tie between identical rows; either one is fine.</td>
+</tr>
+<tr>
+<td>A newer version</td>
+<td>18 orders</td>
+<td>The batch version wins.</td>
+</tr>
+<tr>
+<td>Two newer versions</td>
+<td>5 orders, 10 rows</td>
+<td>The later of the two wins.</td>
+</tr>
+<tr>
+<td>An older version that arrived late</td>
+<td>6</td>
+<td>The target's version wins. Nothing changes.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Common wrong answers</h2>
+<p><strong>The batch always wins.</strong> Remove the matching orders from the target and append
+the whole batch:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">target</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="s2">&quot;order_id&quot;</span><span class="p">,</span> <span class="s2">&quot;left_anti&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">unionByName</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Two problems. The five orders with two versions in the batch are now in the result
+twice: 125 rows. And the six late, older versions overwrite the newer rows the
+target already had. An order can go from <code>DELIVERED</code> back to <code>SHIPPED</code>.</p>
+<p><strong>The latest batch row always wins.</strong> De-duplicating the batch first fixes the row
+count, 120, and leaves the second problem: 6 orders are overwritten with stale
+data. "It is in the newest file" does not mean "it is the newest version". Compare
+<code>updated_at</code>.</p>
+<p><strong><code>union</code> and <code>distinct()</code>.</strong> <code>distinct</code> removes rows that are identical in every
+column. Only the 15 re-delivered copies are. Every order with a real update keeps
+both its versions: 154 rows.</p>
+<p><strong><code>union</code> and <code>dropDuplicates(["order_id"])</code>.</strong> One row per order, 120 rows, and no
+say in which one. <code>dropDuplicates</code> keeps whichever row it meets first. On this data
+all 23 changed orders came out with a version that is not the latest.</p>
+<p><strong><code>groupBy("order_id")</code> with <code>max</code> of every column.</strong> Each column is maximised on
+its own, so the result mixes versions: the latest <code>updated_at</code>, the alphabetically
+last status, the largest amount. 21 orders get a row that never existed.</p>
+<h2>Another correct way</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">max_by</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;amount&quot;</span><span class="p">,</span> <span class="s2">&quot;updated_at&quot;</span><span class="p">),</span> <span class="s2">&quot;updated_at&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>in a <code>groupBy("order_id")</code>, then unpack the struct. <code>max_by</code> returns the whole
+struct from the row with the highest <code>updated_at</code>, so the columns stay together. It
+gives the same result as the reference solution.</p>
+<h2>In a real table: MERGE</h2>
+<p>On Delta Lake this load is a <code>MERGE INTO target USING batch</code>. The same three rules
+apply, and the last two are the ones people leave out:</p>
+<ul>
+<li><code>WHEN NOT MATCHED THEN INSERT</code>: the new orders.</li>
+<li><code>WHEN MATCHED AND batch.updated_at &gt; target.updated_at THEN UPDATE</code>: the
+  condition is what stops a late, older version from overwriting a newer one.</li>
+<li>De-duplicate the batch to one row per <code>order_id</code> first. A merge in which two
+  source rows match the same target row fails.</li>
+</ul>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Orders</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New orders, one row each</td>
+<td>101 to 120</td>
+<td>Keeps the row count of the buggy load correct.</td>
+</tr>
+<tr>
+<td>One newer version</td>
+<td>18</td>
+<td>The original bug.</td>
+</tr>
+<tr>
+<td>Two newer versions in one batch</td>
+<td>5</td>
+<td>"Batch wins" without de-duplicating; <code>distinct()</code>.</td>
+</tr>
+<tr>
+<td>An older version than the target has</td>
+<td>6</td>
+<td>"Batch wins", with or without de-duplicating.</td>
+</tr>
+<tr>
+<td>Exact copies of target rows</td>
+<td>15</td>
+<td>Must not create duplicates; harmless ties.</td>
+</tr>
+<tr>
+<td>A changed amount as well as a changed status</td>
+<td>5</td>
+<td>Taking columns from different versions.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../rolling-seven-days/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">39. Seven rows are not seven days</span></a>
+      <span class="pager-gap"></span>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#ai-code">The AI-written code</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

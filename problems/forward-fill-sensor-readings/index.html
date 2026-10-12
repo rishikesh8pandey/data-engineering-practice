@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fill the gaps in sensor readings with the last known value | SQL problem | NullTrap</title>
+  <meta name="description" content="Forward-fill missing sensor readings per device in Spark SQL, carrying the last known value across gaps of any length. LAG only reaches back one row, so runs of NULLs stay NULL.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/forward-fill-sensor-readings/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Fill the gaps in sensor readings with the last known value | SQL problem | NullTrap">
+  <meta property="og:description" content="Forward-fill missing sensor readings per device in Spark SQL, carrying the last known value across gaps of any length. LAG only reaches back one row, so runs of NULLs stay NULL.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/forward-fill-sensor-readings/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 26</span>
+    </nav>
+    <h1>26. Fill the gaps in sensor readings with the last known value</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge medium">Medium</span><span class="badge trap">NULL trap</span></p>
+    <p class="tags">forward fill &middot; last non-null &middot; window functions &middot; time series</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/026-forward-fill-sensor-readings.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="forward-fill-sensor-readings" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>Cold-storage sensors report a temperature every 15 minutes. Sometimes a sensor fails
+to report and the reading arrives as NULL. A monitoring chart needs a value at every
+point, so each missing reading should show the last temperature the device did
+report.</p>
+<p>A first attempt used the previous row's value. It works for a single missing
+reading and leaves holes wherever two or more are missing in a row.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="readings"><code>readings</code></h3>
+<p>One row per device every 15 minutes. A device never has two rows with the same
+timestamp.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>device_id</code></td>
+<td>BIGINT</td>
+<td>The sensor.</td>
+</tr>
+<tr>
+<td><code>reading_ts</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td>When the reading was due.</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>DOUBLE</td>
+<td>Degrees Celsius. NULL if the sensor did not report.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return every row of <code>readings</code> with one more column, <code>filled_temperature</code>.</p>
+<ul>
+<li>If <code>temperature</code> is present, <code>filled_temperature</code> is the same value.</li>
+<li>If it is NULL, <code>filled_temperature</code> is the device's most recent earlier
+  temperature that is not NULL, however many readings back that is.</li>
+<li>Values are never taken from another device.</li>
+<li>Values are never taken from a later reading. If a device has no earlier reading
+  at all, <code>filled_temperature</code> is NULL.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per row of <code>readings</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>device_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>reading_ts</code></td>
+<td>TIMESTAMP_NTZ</td>
+<td></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>DOUBLE</td>
+<td>The original value, NULL included.</td>
+</tr>
+<tr>
+<td><code>filled_temperature</code></td>
+<td>DOUBLE</td>
+<td>The reading, or the last known one before it.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+<section id="editor" class="editor">
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. If you use <code>IGNORE NULLS</code>, DuckDB wants it inside the brackets: <code>LAST_VALUE(temperature IGNORE NULLS) OVER (...)</code>. Spark wants it after them: <code>LAST_VALUE(temperature) IGNORE NULLS OVER (...)</code>.
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
+  <script type="application/json" id="editor-config">{"slug": "forward-fill-sensor-readings", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "readings", "url": "../../data/026-forward-fill-sensor-readings/readings.parquet"}], "starter": "-- Tables: readings\nSELECT *\nFROM readings\nLIMIT 10", "expected": {"columns": ["device_id", "filled_temperature", "reading_ts", "temperature"], "row_count": 320, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"device_id\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(round(\"filled_temperature\", 6) AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"reading_ts\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(round(\"temperature\", 6) AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "611d5c33f452315413fd05314c25660e55148d9df6047f2a61ee2e809c2244ba", "column_checks": [{"name": "device_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"device_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "3322580dc03dd1bdbe9477095685ab0914fdd63e8b0135cd3485490a88012e59"}, {"name": "filled_temperature", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"filled_temperature\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "58964481f3208a538bb0148e9c2bfb2c85e530b5b550168f6c148e54305ec3a2"}, {"name": "reading_ts", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"reading_ts\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "f50d06377c8f8c449f9b94ca0adabbd5a78209eb6e92b7f4029f6822b25a73df"}, {"name": "temperature", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(round(\"temperature\", 6) AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "6a8a7411ba46eeab24b8db3713ee8bcbf2da69594bbcd05cbf60259480b12d49"}]}}</script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>"The last known value" means: look back through the device's readings, in time
+order, until you find one that is not NULL. How far back that is differs per row,
+so a fixed look-back such as <code>LAG</code> cannot do it.</p>
+<p>There are two standard ways.</p>
+<p><strong>1. Let the window function skip the NULLs.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">LAST_VALUE</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span><span class="w"> </span><span class="k">IGNORE</span><span class="w"> </span><span class="n">NULLS</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">device_id</span>
+<span class="w">    </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">reading_ts</span>
+<span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">filled_temperature</span>
+</code></pre></div>
+
+<p>The window's default frame runs from the device's first row to the current row.
+<code>LAST_VALUE ... IGNORE NULLS</code> returns the last reading in that frame that is not
+NULL: the current one if it is there, otherwise the nearest earlier one. This is the
+PySpark reference solution too: <code>F.last("temperature", ignorenulls=True)</code>.</p>
+<p><strong>2. Build groups with a running count.</strong> This is the SQL reference solution, and it
+works in every engine, including ones with no <code>IGNORE NULLS</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">COUNT</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span><span class="w"> </span><span class="n">OVER</span><span class="w"> </span><span class="p">(</span><span class="n">PARTITION</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">device_id</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">reading_ts</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">reading_group</span>
+</code></pre></div>
+
+<p><code>COUNT(temperature)</code> counts only real readings. As a running count it goes up by one
+at every real reading and stays level through the gap behind it. So a reading and
+all the missing rows that follow it share one number, and every such group contains
+exactly one real temperature. <code>MAX(temperature)</code> over the group picks it up. (<code>MIN</code>
+would do as well: there is only one value.)</p>
+<p>Both stop at the device boundary because of <code>PARTITION BY device_id</code>, and neither
+looks forward, so missing readings at the very start of a device stay NULL.</p>
+<p>Of the 320 rows, 78 have no temperature. 33 of those get a value. 45 stay NULL: all
+40 readings of device 7, which never reported, and the leading gaps of devices 1, 3
+and 4.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>COALESCE(temperature, LAG(temperature) OVER (...))</code>.</strong> Looks back exactly one
+row. If that row is missing too, the result is NULL. 8 rows that should have a value
+stay empty: every missing reading after the first one in a run. This is the first
+attempt from the story.</p>
+<p><strong><code>LAST_VALUE(temperature)</code> without <code>IGNORE NULLS</code>.</strong> The last row of the frame is
+the current row, so this returns the current row's own value, NULL included.
+Nothing is filled: all 33 rows are still empty.</p>
+<p><strong>No <code>PARTITION BY device_id</code>.</strong> Readings of all devices are put in one time line,
+and a gap is filled with whatever any sensor reported last. 77 rows are wrong,
+including all 40 of the sensor that never reported: it now shows the temperatures
+of its neighbours.</p>
+<p><strong>A running <code>MAX(temperature)</code>.</strong> <code>MAX</code> over "everything so far" is the highest
+temperature so far, not the latest. It only looks right while the temperature is
+rising. 228 rows wrong.</p>
+<p><strong>Filling the start from the next reading.</strong> Back-filling the leading gaps gives a
+value to 5 rows that must stay NULL. The requirement is explicit: a value is never
+taken from a later reading. On a chart, a back-filled value shows a temperature at
+a time when nobody knew it.</p>
+<p><strong>Filling with the device's average.</strong> An average is not a reading, and it uses
+later readings as well. 36 rows wrong.</p>
+<p><strong>Overwriting <code>temperature</code>.</strong> The output keeps the original column, NULLs included,
+next to the filled one. Once the fill has replaced the original you can no longer
+tell a measured value from a carried one.</p>
+<h2>IGNORE NULLS is spelled differently per engine</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Engine</th>
+<th>Syntax</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spark SQL</td>
+<td><code>LAST_VALUE(temperature) IGNORE NULLS OVER (...)</code> or <code>LAST_VALUE(temperature, TRUE) OVER (...)</code></td>
+</tr>
+<tr>
+<td>DuckDB (the browser editor)</td>
+<td><code>LAST_VALUE(temperature IGNORE NULLS) OVER (...)</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Each engine rejects the other's spelling with a syntax error. The running-count
+version has no such problem.</p>
+<h2>How long may a value be carried?</h2>
+<p>Here: forever. In a real pipeline, ask. A cold-storage sensor that has been silent
+for six hours is not "still at 4.1 degrees"; it is unknown, and probably an alert.
+Forward fill usually comes with a limit ("at most one hour"), and that needs the
+timestamp of the last real reading as well as its value.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Five missing readings in a row</td>
+<td>device 2</td>
+<td><code>LAG</code>.</td>
+</tr>
+<tr>
+<td>Missing readings at the start</td>
+<td>device 1 (three), devices 3 and 4 (one each)</td>
+<td>Back-filling; a missing <code>PARTITION BY</code>.</td>
+</tr>
+<tr>
+<td>A sensor that never reported</td>
+<td>device 7</td>
+<td>A missing <code>PARTITION BY</code>: every row must stay NULL.</td>
+</tr>
+<tr>
+<td>Nothing missing</td>
+<td>device 8</td>
+<td><code>filled_temperature</code> equals <code>temperature</code> on every row.</td>
+</tr>
+<tr>
+<td>Temperatures that go down as well as up</td>
+<td>all devices</td>
+<td>A running <code>MAX</code>.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../revenue-by-category-many-to-many/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">25. Revenue by category when a product sits in several</span></a>
+      <a class="pager-link next" href="../collapse-double-clicks/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">27. Collapse double-clicks into one click</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amounts that arrive as text | PySpark problem | NullTrap</title>
+  <meta name="description" content="Turn payment amounts typed as text (&quot;₹1,299&quot;, &quot;Rs. 300.50&quot;, &quot;N/A&quot;) into decimals with PySpark. A plain cast fails the job in Spark 4 and silently returns NULL in older versions; neither tells you which rows were bad.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/amounts-stored-as-text/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Amounts that arrive as text | PySpark problem | NullTrap">
+  <meta property="og:description" content="Turn payment amounts typed as text (&quot;₹1,299&quot;, &quot;Rs. 300.50&quot;, &quot;N/A&quot;) into decimals with PySpark. A plain cast fails the job in Spark 4 and silently returns NULL in older versions; neither tells you which rows were bad.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/amounts-stored-as-text/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 31</span>
+    </nav>
+    <h1>31. Amounts that arrive as text</h1>
+    <p class="badges"><span class="badge track track-pyspark">PySpark</span><span class="badge easy">Easy</span><span class="badge trap">Schema trap</span></p>
+    <p class="tags">data cleaning &middot; casting &middot; try_cast &middot; regexp_replace &middot; data types</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/031-amounts-stored-as-text.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="amounts-stored-as-text" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>A partner sends payments in a spreadsheet export. The amount column was typed by
+people, so it is text: sometimes with a rupee sign, sometimes with thousands
+separators, sometimes "N/A".</p>
+<p>The load job casts the column to a decimal. In the old cluster the bad values quietly
+became NULL and nobody knew how many there were. After the upgrade to Spark 4 the job
+does not finish at all: one bad value stops it.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="raw_payments"><code>raw_payments</code></h3>
+<p>One row per payment.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>payment_id</code></td>
+<td>BIGINT</td>
+<td>Unique per payment.</td>
+</tr>
+<tr>
+<td><code>amount_text</code></td>
+<td>STRING</td>
+<td>The amount as it was typed. Can be NULL or empty.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Look at the variety first: <code>raw_payments.select("amount_text").distinct().show(200, truncate=False)</code>.</p>
+<h2 id="requirement">Requirement</h2>
+<p>Return every payment with its amount as a number.</p>
+<p>To read an amount:</p>
+<ol>
+<li>Remove the rupee markers <code>₹</code>, <code>Rs.</code>, <code>Rs</code> and <code>INR</code>, and every comma. Commas
+   are thousands separators, in western (<code>1,234,567</code>) or Indian (<code>12,34,567</code>)
+   grouping.</li>
+<li>Remove spaces at the start and the end.</li>
+<li>If what is left is a plain number, such as <code>1299</code>, <code>1299.50</code> or <code>-200.00</code>, that
+   is the amount. A minus sign means a refund and is valid. So is <code>0</code>.</li>
+<li>
+<p>Anything else is not an amount: <code>N/A</code>, an empty value, <code>12.5.3</code>, <code>1299.00 USD</code>.</p>
+</li>
+<li>
+<p><code>amount</code> is the number, and NULL when the text is not an amount.</p>
+</li>
+<li><code>is_valid</code> is true when <code>amount</code> is not NULL and false otherwise.</li>
+<li>Every payment appears, valid or not. The job must not fail on bad values.</li>
+</ol>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per payment.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>payment_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(12,2)</td>
+<td>NULL if the text is not an amount.</td>
+</tr>
+<tr>
+<td><code>is_valid</code></td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>Three steps, in this order:</p>
+<ol>
+<li><strong>Clean what you understand.</strong> Remove the things you know are decoration: the
+   rupee markers and the thousands separators.</li>
+<li><strong>Convert with <code>try_cast</code>.</strong> It returns NULL for text that is not a number,
+   instead of stopping the job.</li>
+<li><strong>Keep the evidence.</strong> A separate <code>is_valid</code> column says which rows could not be
+   read, so they can be counted, reported and fixed at the source.</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="n">cleaned</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">trim</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">regexp_replace</span><span class="p">(</span><span class="s2">&quot;amount_text&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;₹|Rs\.?|INR|,&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+<span class="n">amount</span> <span class="o">=</span> <span class="n">cleaned</span><span class="o">.</span><span class="n">try_cast</span><span class="p">(</span><span class="s2">&quot;decimal(12,2)&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The pattern is a list of alternatives: <code>₹</code>, or <code>Rs</code> with an optional dot, or <code>INR</code>,
+or a comma. It removes only those. Anything else that is not a number stays in the
+text, and <code>try_cast</code> then rejects it. That is the point: the cleaning is narrow, so
+that surprises still show up as invalid rows.</p>
+<p>The target type is DECIMAL, not DOUBLE. Money needs exact decimal arithmetic.</p>
+<p>Of the 126 payments, 113 are valid amounts and 13 are not. 9 of the valid ones are
+refunds with a minus sign.</p>
+<h2>What the cast does in each Spark version</h2>
+<p><strong>Spark 4, plain <code>cast</code>.</strong> The job stops at the first value it cannot read:</p>
+<div class="codehilite"><pre><span></span><code>[CAST_INVALID_INPUT] The value &#39;₹69,522.50&#39; of the type &quot;STRING&quot; cannot be cast
+to &quot;DECIMAL(12,2)&quot; because it is malformed. ... Use `try_cast` to tolerate
+malformed input and return NULL instead.
+</code></pre></div>
+
+<p>Cleaning first does not make the plain cast safe. After cleaning, the job stops on
+the empty string instead.</p>
+<p><strong>Spark 3, or ANSI mode switched off.</strong> The same <code>cast</code> returns NULL for every value
+it cannot read, and says nothing. On this data that is 65 valid amounts turned into
+NULL along with the 13 bad ones. This is the old behaviour from the story.</p>
+<p><code>try_cast</code> gives the quiet behaviour on purpose, one expression at a time. That is
+fine as long as you then count the NULLs, which is what <code>is_valid</code> is for.</p>
+<h2>Common wrong answers</h2>
+<p><strong><code>try_cast</code> without cleaning.</strong> No error, and 65 good amounts are lost: everything
+with a rupee marker or a comma.</p>
+<p><strong>Removing only the commas.</strong> 57 amounts are still lost: the ones with <code>₹</code>, <code>Rs</code> or
+<code>INR</code>.</p>
+<p><strong><code>Rs</code> without the optional dot.</strong> <code>Rs. 300.50</code> becomes <code>. 300.50</code>, which is not a
+number. 9 amounts lost. In a regular expression a dot means "any character", so the
+literal dot is written <code>\.</code>, and <code>?</code> makes it optional.</p>
+<p><strong>Keeping only digits and dots: <code>regexp_replace(amount_text, "[^0-9.]", "")</code>.</strong> The
+popular one-liner, and the most dangerous answer here, because it produces numbers.</p>
+<ul>
+<li>The minus sign is removed. All 9 refunds become payments.</li>
+<li><code>1299.00 USD</code> becomes 1299.00. It was a dollar amount.</li>
+<li><code>1 299</code> becomes 1299.00. Nobody knows what was meant.</li>
+<li><code>Rs. 300.50</code> becomes <code>.300.50</code>, which is not a number, so 9 good amounts are
+  lost as well.</li>
+</ul>
+<p>20 rows are wrong, and the total goes from 71,545,404.44 to 80,396,910.52. Nothing
+fails. A cleaning rule that deletes everything it does not recognise cannot tell you
+that it met something it did not recognise.</p>
+<p><strong>Keeping digits, dots and the minus sign.</strong> The refunds survive, the other
+problems remain. 11 rows wrong.</p>
+<p><strong><code>try_cast("double")</code>.</strong> The type is wrong, and binary floating point cannot hold
+most decimal fractions exactly. Totals of doubles drift by fractions of a paisa.</p>
+<p><strong><code>decimal(12,0)</code>.</strong> The paise are rounded away. 69 amounts wrong.</p>
+<p><strong><code>is_valid</code> from the text: <code>amount_text.isNotNull()</code>.</strong> <code>N/A</code> is not NULL. 12 rows
+are flagged valid with no amount.</p>
+<p><strong>Replacing invalid amounts with 0.</strong> A payment of unknown size is not a payment of
+zero. Sums still look fine and averages are pulled down.</p>
+<p><strong>Dropping the invalid rows.</strong> 113 rows instead of 126. The 13 payments happened;
+somebody has to chase them.</p>
+<h2>Two things <code>try_cast</code> does that you might not expect</h2>
+<ul>
+<li>It ignores spaces around the number. <code>' 450 '</code> converts without <code>trim</code>. The
+  reference solution trims anyway, so the rule is visible in the code.</li>
+<li>It accepts scientific notation. <code>'1e3'</code> converts to 1000.00. If a product code
+  like <code>1E3</code> can end up in this column, check the format with a regular expression
+  before casting.</li>
+</ul>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Kind of value</th>
+<th>Expected</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>₹1,299.00</code>, <code>Rs. 300.50</code>, <code>Rs 12,34,567.50</code>, <code>INR 2500.00</code></td>
+<td>valid</td>
+<td>Casting without cleaning.</td>
+</tr>
+<tr>
+<td><code>12,34,567.50</code></td>
+<td>valid</td>
+<td>Indian digit grouping: commas are not every three digits.</td>
+</tr>
+<tr>
+<td><code>-200.00</code></td>
+<td>valid, negative</td>
+<td>Stripping everything that is not a digit.</td>
+</tr>
+<tr>
+<td><code>0</code>, <code>0.00</code></td>
+<td>valid, zero</td>
+<td>Treating 0 as "missing".</td>
+</tr>
+<tr>
+<td><code>₹ 450.5</code></td>
+<td>450.50</td>
+<td>One decimal place is still a number.</td>
+</tr>
+<tr>
+<td><code>1299.00 USD</code>, <code>1 299</code></td>
+<td>invalid</td>
+<td>Stripping everything that is not a digit.</td>
+</tr>
+<tr>
+<td><code>12.5.3</code>, <code>--</code>, <code>abc</code>, <code>twelve hundred</code></td>
+<td>invalid</td>
+<td>A plain cast.</td>
+</tr>
+<tr>
+<td><code>₹</code>, <code>Rs.</code></td>
+<td>invalid</td>
+<td>A marker with nothing behind it cleans to an empty string.</td>
+</tr>
+<tr>
+<td><code>N/A</code>, <code>NULL</code> (as text), empty, spaces, a real NULL</td>
+<td>invalid</td>
+<td><code>is_valid</code> taken from the text.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../exclude-value-drops-nulls/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">30. Everything except LOW, which quietly excludes the unknowns</span></a>
+      <a class="pager-link next" href="../json-payload-schema-drift/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">32. JSON payloads that changed shape</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

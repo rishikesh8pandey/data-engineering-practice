@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The longest login streak | SQL problem | NullTrap</title>
+  <meta name="description" content="Find each user&#x27;s longest run of consecutive login days in Spark SQL. A gaps-and-islands problem where several logins on one day, ties between streaks and streaks across a year end all break the usual shortcut.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/longest-login-streak/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The longest login streak | SQL problem | NullTrap">
+  <meta property="og:description" content="Find each user&#x27;s longest run of consecutive login days in Spark SQL. A gaps-and-islands problem where several logins on one day, ties between streaks and streaks across a year end all break the usual shortcut.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/longest-login-streak/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 28</span>
+    </nav>
+    <h1>28. The longest login streak</h1>
+    <p class="badges"><span class="badge track track-sql">SQL</span><span class="badge hard">Hard</span><span class="badge trap">Duplicate trap</span><span class="badge trap">Boundary trap</span></p>
+    <p class="tags">gaps and islands &middot; streaks &middot; row_number &middot; window functions &middot; deduplication</p>
+    <div class="problem-actions">
+      <a class="button" href="#editor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Solve in the browser</a>
+      <a class="button secondary" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/028-longest-login-streak.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="longest-login-streak" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>The app shows every user a badge for their longest login streak: the most days in a
+row on which they opened the app.</p>
+<p>The badge was wrong for the most active users. People who logged in several times a
+day were shown streaks of one or two days, although they had not missed a day in
+weeks.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="app_logins"><code>app_logins</code></h3>
+<p>One row per login. A user can log in several times on the same day.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td>The user.</td>
+</tr>
+<tr>
+<td><code>login_date</code></td>
+<td>DATE</td>
+<td>The calendar date of the login.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return each user's longest streak.</p>
+<ul>
+<li>A streak is a run of consecutive calendar days on each of which the user logged in
+  at least once. 31 December followed by 1 January is consecutive.</li>
+<li>Several logins on one day count as one day.</li>
+<li><code>streak_days</code> is the number of days in the streak. A user who logged in on a
+  single day has a streak of 1.</li>
+<li>If a user has two or more streaks of the same longest length, return the most
+  recent of them.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>Exactly one row per user.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>streak_start</code></td>
+<td>DATE</td>
+<td>First day of the streak.</td>
+</tr>
+<tr>
+<td><code>streak_end</code></td>
+<td>DATE</td>
+<td>Last day of the streak.</td>
+</tr>
+<tr>
+<td><code>streak_days</code></td>
+<td>BIGINT</td>
+<td>Number of days from start to end, both included.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+
+<section id="editor" class="editor">
+  <div class="prose">
+    <h2>Solve it in the browser</h2>
+    <p class="note">
+      This editor runs DuckDB inside your browser. Nothing is installed and nothing is sent
+      to a server. DuckDB's SQL is close to Spark SQL but not identical. <code>DATE_SUB(date, n)</code> and the two-argument <code>DATEDIFF</code> are Spark only. <code>DATE_ADD(login_date, CAST(-n AS INT))</code> works in both engines.
+      The Colab notebook runs real Spark.
+    </p>
+  </div>
+
+  <div class="workbench">
+    <div class="workbench-bar">
+      <span class="workbench-title">query.sql</span>
+      <span class="workbench-engine">DuckDB, in your browser</span>
+      <button type="button" class="workbench-reset" id="editor-reset" title="Replace your query with the starting query">Reset</button>
+    </div>
+    <textarea id="editor-sql" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14" aria-label="Your SQL query"></textarea>
+    <div class="workbench-actions">
+      <button class="button" id="editor-check" type="button">Run and check</button>
+      <button class="button secondary" id="editor-run" type="button">Run</button>
+      <span id="editor-status" class="workbench-status" aria-live="polite"></span>
+      <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs the query</span>
+    </div>
+  </div>
+
+  <div id="editor-message" class="editor-message" role="status" hidden></div>
+  <div id="editor-result" class="editor-result">
+    <p class="result-empty">Your result appears here. Your draft is kept in this browser.</p>
+  </div>
+
+  <script type="application/json" id="editor-config">{"slug": "longest-login-streak", "engine_url": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm", "result_table": "__result", "tables": [{"name": "app_logins", "url": "../../data/028-longest-login-streak/app_logins.parquet"}], "starter": "-- Tables: app_logins\nSELECT *\nFROM app_logins\nLIMIT 10", "expected": {"columns": ["streak_days", "streak_end", "streak_start", "user_id"], "row_count": 27, "fingerprint_sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT concat_ws(chr(31), coalesce(CAST(\"streak_days\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"streak_end\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"streak_start\" AS VARCHAR), chr(1) || 'NULL'), coalesce(CAST(\"user_id\" AS VARCHAR), chr(1) || 'NULL')) AS v FROM __result)", "fingerprint": "e7967c5b31205903c467dd6abfc96845a551553a87411e8a12762780104bb942", "column_checks": [{"name": "streak_days", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"streak_days\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "85fdf26745148889a70f670b396868a62c69d9f5e9a1dc7f7b806c63496c7a59"}, {"name": "streak_end", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"streak_end\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "825dc32c42102192c661b37042666e537b807f2c1956b9c0142b8adc2536f8d3"}, {"name": "streak_start", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"streak_start\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "1d122b0f4b16c65e479768b081797f15863c07df5c13fcc06e158d08be00054e"}, {"name": "user_id", "sql": "SELECT sha256(coalesce(string_agg(v, chr(10) ORDER BY v), '')) AS fp FROM (SELECT coalesce(CAST(\"user_id\" AS VARCHAR), chr(1) || 'NULL') AS v FROM __result)", "fingerprint": "c5d354008b645c6245bc4214aaaaebd286d905635eb62a0e7ca4aa133b18feee"}]}}</script>
+  <script type="module" src="../../static/editor.js?v=95251905b4"></script>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The approach</h2>
+<p>This is the classic "gaps and islands" problem: find the islands (runs of
+consecutive days), then pick the longest.</p>
+<p><strong>Step 1: one row per user and day.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="k">DISTINCT</span><span class="w"> </span><span class="n">user_id</span><span class="p">,</span><span class="w"> </span><span class="n">login_date</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">app_logins</span>
+</code></pre></div>
+
+<p>A streak is counted in days. Three logins on one day are one day. Everything after
+this step assumes one row per day, so it has to come first.</p>
+<p><strong>Step 2: find a value that is the same for every day of a run.</strong> Number each user's
+days in date order with <code>ROW_NUMBER()</code>. Inside a run of consecutive days the date
+goes up by one and the number goes up by one, so the difference between them does
+not change:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>login_date</th>
+<th>day_number</th>
+<th>date minus number</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2025-01-03</td>
+<td>1</td>
+<td>2025-01-02</td>
+</tr>
+<tr>
+<td>2025-01-04</td>
+<td>2</td>
+<td>2025-01-02</td>
+</tr>
+<tr>
+<td>2025-01-05</td>
+<td>3</td>
+<td>2025-01-02</td>
+</tr>
+<tr>
+<td>2025-01-09</td>
+<td>4</td>
+<td>2025-01-05</td>
+</tr>
+<tr>
+<td>2025-01-10</td>
+<td>5</td>
+<td>2025-01-05</td>
+</tr>
+</tbody>
+</table></div>
+<p>After a gap the date jumps and the number does not, so the difference changes. The
+date in the third column means nothing by itself. It is only a label for the run.</p>
+<p><strong>Step 3: one row per run.</strong> Group by user and that label: <code>MIN(login_date)</code> is the
+start, <code>MAX(login_date)</code> the end, <code>COUNT(*)</code> the length.</p>
+<p><strong>Step 4: the longest run per user.</strong> <code>ROW_NUMBER()</code> ordered by
+<code>streak_days DESC, streak_end DESC</code>, keep position 1. The second sort key is the
+tie rule from the statement: of two equally long streaks, the more recent.</p>
+<p>Because the arithmetic is on dates, month ends and New Year need no special
+handling. 31 December plus one day is 1 January.</p>
+<p>There are 498 logins by 27 users on 370 different user-days.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Skipping step 1.</strong> With several rows for one day, the row numbers keep going up
+while the date stands still, and the "date minus number" label changes inside a
+run. The run is cut into pieces. This is the bug in the story: the most active
+users, who log in several times a day, are the ones who lose their streak. 23 of
+the 27 users have at least one day with two or more logins, and the result is wrong
+for 22 of them. User 33 logged in three times on 31 December and gets a streak of 4
+days instead of 6.</p>
+<p><strong><code>DENSE_RANK()</code> on the raw logins, then <code>COUNT(*)</code>.</strong> <code>DENSE_RANK</code> gives all rows
+of one day the same number, so the label is right and the runs are found correctly.
+But <code>COUNT(*)</code> now counts logins, not days. Wrong for 19 users. With
+<code>COUNT(DISTINCT login_date)</code> this approach is correct.</p>
+<p><strong>No rule for ties.</strong> <code>ORDER BY streak_days DESC</code> alone leaves the choice between
+two equal streaks to the engine. Five users have such a tie. Sorting by
+<code>streak_end ASC</code> returns the oldest of the streaks instead of the most recent and
+is wrong for all five.</p>
+<p><strong><code>RANK()</code> instead of <code>ROW_NUMBER()</code>.</strong> <code>RANK</code> gives tied streaks the same position
+and returns both. 36 rows for 27 users.</p>
+<p><strong>Counting consecutive pairs.</strong> Flag every day whose previous day is also a login
+day, sum the flags and add one. That counts the consecutive days of all streaks
+together. A user with streaks of 4 and 4 gets 7. Wrong for 25 users.</p>
+<p><strong>First login to last login.</strong> <code>DATEDIFF(MAX, MIN) + 1</code> is the span of the user's
+activity, gaps included. Wrong for 25 users.</p>
+<p><strong><code>streak_days</code> as an INT.</strong> <code>DATEDIFF(streak_end, streak_start) + 1</code> gives the
+right numbers, but as INT. The output column is BIGINT, which is what <code>COUNT(*)</code>
+returns. Cast it, or count.</p>
+<h2>The other standard method</h2>
+<p>Use <code>LAG</code> to flag the first day of every run (the previous day is not yesterday),
+then take a running sum of the flags. The running sum is a run number. It is one
+step longer and reads more naturally to some people; the result is the same.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A single login</td>
+<td>user 31</td>
+<td>A streak of 1 day.</td>
+</tr>
+<tr>
+<td>Two streaks of 4 days</td>
+<td>user 32</td>
+<td>The later one, 10 to 13 February.</td>
+</tr>
+<tr>
+<td>Across New Year, three logins on 31 December</td>
+<td>user 33</td>
+<td>29 December to 3 January, 6 days.</td>
+</tr>
+<tr>
+<td>Across the end of February</td>
+<td>user 34</td>
+<td>27 February to 2 March, 4 days. 2025 is not a leap year.</td>
+</tr>
+<tr>
+<td>Every other day</td>
+<td>user 35</td>
+<td>Five streaks of 1 day; the most recent is 10 January.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../collapse-double-clicks/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">27. Collapse double-clicks into one click</span></a>
+      <a class="pager-link next" href="../ordered-funnel-seven-days/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">29. A three-step funnel, in order, within seven days</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#editor">Solve it in the browser</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>

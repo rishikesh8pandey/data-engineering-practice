@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The city average that no order adds up to | Debug the AI problem | NullTrap</title>
+  <meta name="description" content="An AI-written Spark SQL query reports the average order value per city by averaging the per-store averages. The order counts are right and the averages are not. Find the bug and fix it.">
+  <link rel="canonical" href="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-of-averages/">
+  <link rel="icon" href="../../static/favicon.svg?v=fc2ea56d66" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../static/favicon.png?v=7631231761">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The city average that no order adds up to | Debug the AI problem | NullTrap">
+  <meta property="og:description" content="An AI-written Spark SQL query reports the average order value per city by averaging the per-store averages. The order counts are right and the averages are not. Find the bug and fix it.">
+  <meta property="og:url" content="https://rishikesh8pandey.github.io/data-engineering-practice/problems/average-of-averages/">
+  <meta property="og:site_name" content="NullTrap">
+  <meta property="og:image" content="https://rishikesh8pandey.github.io/data-engineering-practice/static/share.png?v=4df681bb69">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d1424">
+  <script>
+    // Apply a saved light or dark choice before the page is drawn, so it does not flash.
+    (function () {
+      try {
+        var saved = window.localStorage.getItem("nulltrap.theme");
+        if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+      } catch (error) { /* storage blocked: follow the system setting */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../../static/style.css?v=c2565df84a">
+  <link rel="stylesheet" href="../../static/code.css?v=4a7388524f">
+  <script defer src="../../static/progress.js?v=53e87820ee"></script>
+  <script defer src="../../static/site.js?v=28a35c4fbb"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="../../problems/" aria-current="page">Problems</a>
+        <a href="../../#about">About</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+<header class="page-head problem-head">
+  <div class="wrap">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="../">Problems</a><span aria-hidden="true">/</span><span>Problem 37</span>
+    </nav>
+    <h1>37. The city average that no order adds up to</h1>
+    <p class="badges"><span class="badge track track-debug-the-ai">Debug the AI</span><span class="badge easy">Easy</span><span class="badge trap">Grain trap</span></p>
+    <p class="tags">aggregation &middot; average of averages &middot; weighted average &middot; group by</p>
+    <div class="problem-actions">
+      <a class="button" href="https://colab.research.google.com/github/rishikesh8pandey/data-engineering-practice/blob/main/notebooks/037-average-of-averages.ipynb" target="_blank" rel="noopener">Open in Colab<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/></svg></a>
+      <button class="button secondary" id="mark-solved" type="button" data-slug="average-of-averages" hidden>Mark as solved</button>
+    </div>
+    <details class="disclosure">
+      <summary>How the Colab notebook works</summary>
+      <p>
+        The notebook has the data, an answer cell and a <code>check()</code> function. You
+        need a Google account; nothing is installed on your machine. Free Colab runs only two
+        or three notebooks at a time, so end the session of a finished problem (Runtime &gt;
+        Disconnect and delete runtime) before opening the next one. "Mark as solved" is
+        remembered in this browser only.
+      </p>
+    </details>
+  </div>
+</header>
+
+<div class="wrap problem-layout">
+  <article class="problem-body">
+    <div class="prose">
+<h2 id="the-situation">The situation</h2>
+<p>The regional dashboard shows the average order value per city. An AI assistant wrote
+the query in the answer cell, reusing a per-store summary that already existed.</p>
+<p>It runs, there is one row per city, and the order counts match the orders table
+exactly. Then finance divided Mumbai's revenue by Mumbai's order count and got a
+number that is nowhere near the one on the dashboard.</p>
+<p>Find the bug and fix it.</p>
+<h2 id="input-tables">Input tables</h2>
+<h3 id="orders"><code>orders</code></h3>
+<p>One row per order.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>order_id</code></td>
+<td>BIGINT</td>
+<td>Unique per order.</td>
+</tr>
+<tr>
+<td><code>store_id</code></td>
+<td>BIGINT</td>
+<td>The store that took the order.</td>
+</tr>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td>The city of the store. A store is in one city.</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td>DECIMAL(10,2)</td>
+<td>The order value. Never NULL.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="requirement">Requirement</h2>
+<p>Return one row per city.</p>
+<ul>
+<li><code>orders</code> is the number of orders in the city.</li>
+<li><code>avg_order_value</code> is the city's total order amount divided by the city's number
+  of orders, rounded to 2 decimals.</li>
+</ul>
+<h2 id="expected-output">Expected output</h2>
+<p>One row per city.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>city</code></td>
+<td>STRING</td>
+<td></td>
+</tr>
+<tr>
+<td><code>orders</code></td>
+<td>BIGINT</td>
+<td></td>
+</tr>
+<tr>
+<td><code>avg_order_value</code></td>
+<td>DECIMAL(12,2)</td>
+<td>Total amount / number of orders, rounded to 2 decimals.</td>
+</tr>
+</tbody>
+</table></div>
+    </div>
+<section class="prose">
+<h2 id="ai-code">The AI-written code</h2>
+<div class="codehilite"><pre><span></span><span class="c1">-- Average order value per city, built from the per-store statistics</span>
+<span class="k">WITH</span><span class="w"> </span><span class="n">store_stats</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">SELECT</span>
+<span class="w">        </span><span class="n">city</span><span class="p">,</span>
+<span class="w">        </span><span class="n">store_id</span><span class="p">,</span>
+<span class="w">        </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span>
+<span class="w">        </span><span class="k">AVG</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_amount</span>
+<span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span>
+<span class="w">    </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="n">store_id</span>
+<span class="p">)</span>
+<span class="k">SELECT</span>
+<span class="w">    </span><span class="n">city</span><span class="p">,</span>
+<span class="w">    </span><span class="k">SUM</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span>
+<span class="w">    </span><span class="k">CAST</span><span class="p">(</span><span class="n">ROUND</span><span class="p">(</span><span class="k">AVG</span><span class="p">(</span><span class="n">avg_amount</span><span class="p">),</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_order_value</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">store_stats</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">city</span>
+</pre></div>
+</section>
+
+    <section class="prose">
+      <h2 id="explanation">Explanation</h2>
+<details class="explanation">
+<summary><span>Show explanation</span><span class="summary-note">Gives the answer away. Try the problem first.</span></summary>
+<div class="explanation-body">
+<h2>The bug</h2>
+<div class="codehilite"><pre><span></span><code><span class="k">WITH</span><span class="w"> </span><span class="n">store_stats</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="n">store_id</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="n">amount</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_amount</span>
+<span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span>
+<span class="w">    </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="n">store_id</span>
+<span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="n">avg_amount</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_order_value</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">store_stats</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">city</span>
+</code></pre></div>
+
+<p>The first step works out an average per store. The second step averages those
+averages. That gives every <strong>store</strong> the same weight, however many orders it has.</p>
+<p>Mumbai has four stores:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Store</th>
+<th>Orders</th>
+<th>Average order</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>101</td>
+<td>60</td>
+<td>2405.10</td>
+</tr>
+<tr>
+<td>102</td>
+<td>9</td>
+<td>440.17</td>
+</tr>
+<tr>
+<td>103</td>
+<td>6</td>
+<td>304.83</td>
+</tr>
+<tr>
+<td>104</td>
+<td>4</td>
+<td>326.50</td>
+</tr>
+</tbody>
+</table></div>
+<p>The average of the four averages is 869.15. But 60 of Mumbai's 79 orders were taken
+by store 101, and the real average order in Mumbai is 1916.49. The four orders of
+store 104 pull as hard as the sixty of store 101.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>City</th>
+<th>Stores</th>
+<th>Correct</th>
+<th>The buggy query</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chennai</td>
+<td>2</td>
+<td>1348.23</td>
+<td>988.57</td>
+</tr>
+<tr>
+<td>Delhi</td>
+<td>3</td>
+<td>908.03</td>
+<td>1410.43</td>
+</tr>
+<tr>
+<td>Indore</td>
+<td>2</td>
+<td>1282.77</td>
+<td>1282.77</td>
+</tr>
+<tr>
+<td>Kochi</td>
+<td>1</td>
+<td>966.00</td>
+<td>966.00</td>
+</tr>
+<tr>
+<td>Mumbai</td>
+<td>4</td>
+<td>1916.49</td>
+<td>869.15</td>
+</tr>
+<tr>
+<td>Pune</td>
+<td>3</td>
+<td>1559.01</td>
+<td>868.11</td>
+</tr>
+</tbody>
+</table></div>
+<p>The error has no fixed direction. Delhi comes out too <strong>high</strong>, because there the
+small store has the large baskets.</p>
+<p>Why it got through:</p>
+<ul>
+<li><code>orders</code> is right in every row. Counts can be added up, so <code>SUM(orders)</code> over the
+  store rows is correct, and that was the column people checked.</li>
+<li>Kochi has one store. The average of one average is that average.</li>
+<li>Indore has two stores with 12 orders each. When every group has the same number of
+  rows, the average of the averages equals the overall average. Any test city with
+  evenly sized stores passes.</li>
+</ul>
+<h2>The fix</h2>
+<p>Average the orders, not the stores:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span>
+<span class="w">    </span><span class="n">city</span><span class="p">,</span>
+<span class="w">    </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span>
+<span class="w">    </span><span class="k">CAST</span><span class="p">(</span><span class="n">ROUND</span><span class="p">(</span><span class="k">AVG</span><span class="p">(</span><span class="n">amount</span><span class="p">),</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_order_value</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">orders</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">city</span>
+</code></pre></div>
+
+<p>An average is a sum divided by a count. If you must build it from a summary table,
+carry the sum and the count up, and divide at the end:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">city</span><span class="p">,</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">total_amount</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_order_value</span>
+</code></pre></div>
+
+<p>where the store step has <code>SUM(amount) AS total_amount</code> instead of the average. Sums
+and counts can be added. Averages cannot.</p>
+<h2>Common wrong answers</h2>
+<p><strong>Weighting the store averages: <code>SUM(avg_amount * orders) / SUM(orders)</code>.</strong> This is
+the right idea, and with the unrounded store averages it passes here. It is still
+the long way round: it multiplies back what the first step divided, and it depends
+on the stored average having enough decimals. If the summary table holds averages
+rounded to 2 decimals, which is what a report table usually holds, Delhi comes out
+as 908.02 instead of 908.03. Carry the sum instead.</p>
+<p><strong><code>ROUND(AVG(amount), 2)</code> with no cast.</strong> The values are right. Spark types the
+result as <code>DECIMAL(11,2)</code>, the output column is <code>DECIMAL(12,2)</code>, and the check
+reports the type. The buggy query already has the cast; keep it.</p>
+<h2>The same mistake in other clothes</h2>
+<ul>
+<li>Averaging daily conversion rates to get the monthly rate.</li>
+<li>Averaging percentages from groups of different sizes.</li>
+<li>Averaging the per-city numbers above to get a company number. The average order
+  across all 277 orders is 1409.62. The average of the six city averages is 1330.09,
+  and the average of the fifteen store averages is 1054.73. Three "average order
+  values" for the same data, and only the first is one.</li>
+</ul>
+<p>A ratio has to be recomputed from its numerator and denominator at every level it is
+reported at.</p>
+<h2>Edge cases in the data</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Where</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One big store and several small ones</td>
+<td>Mumbai, Pune, Chennai</td>
+<td>The average of averages is far too low.</td>
+</tr>
+<tr>
+<td>A small store with large orders</td>
+<td>Delhi, store 121</td>
+<td>The error can also be upwards.</td>
+</tr>
+<tr>
+<td>A single store</td>
+<td>Kochi</td>
+<td>The bug is invisible.</td>
+</tr>
+<tr>
+<td>Two stores with the same number of orders</td>
+<td>Indore</td>
+<td>The bug is invisible again, for a different reason.</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</details>
+    </section>
+    <nav class="pager" aria-label="Other problems">
+      <a class="pager-link prev" href="../when-chain-order/"><span class="pager-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Previous</span><span class="pager-title">36. The bucket no order ever lands in</span></a>
+      <a class="pager-link next" href="../between-on-timestamps/"><span class="pager-label">Next<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pager-title">38. The month that ends a day early</span></a>
+    </nav>
+  </article>
+
+  <aside class="problem-aside">
+    <nav class="toc" aria-label="On this page">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#the-situation">The situation</a></li>
+        <li><a href="#input-tables">Input tables</a></li>
+        <li><a href="#requirement">Requirement</a></li>
+        <li><a href="#expected-output">Expected output</a></li>
+        <li><a href="#ai-code">The AI-written code</a></li>
+        <li><a href="#explanation">Explanation</a></li>
+      </ol>
+    </nav>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="../../"><img src="../../static/favicon.svg?v=fc2ea56d66" alt="" width="26" height="26">NullTrap</a>
+        <p>Practice problems built around the mistakes real data pipelines punish. Every dataset is synthetic.</p>
+      </div>
+      <nav aria-label="Practice">
+        <h2>Practice</h2>
+        <ul>
+          <li><a href="../../problems/">All problems</a></li>
+          <li><a href="../../problems/?track=sql">SQL track</a></li>
+          <li><a href="../../problems/?track=pyspark">PySpark track</a></li>
+          <li><a href="../../problems/?track=debug-the-ai">Debug the AI track</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Project">
+        <h2>Project</h2>
+        <ul>
+          <li><a href="../../#about">About</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice/issues" target="_blank" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/rishikesh8pandey/data-engineering-practice" target="_blank" rel="noopener">Notebooks on GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>NullTrap runs Spark in Google Colab and DuckDB in your browser. No account, nothing to install.</p>
+    </div>
+  </footer>
+</body>
+</html>
